@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+
+# Reload udev rules so the Focusrite device rule takes effect
+# without requiring a reboot.
+if command -v udevadm >/dev/null 2>&1; then
+    udevadm control --reload-rules
+    udevadm trigger --subsystem-match=usb
+fi

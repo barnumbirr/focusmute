@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Focusmute CLI
+Comment=Hotkey mute control for Focusrite Scarlett 4th Gen interfaces
+Exec=focusmute-cli monitor
+Terminal=true
+Categories=AudioVideo;Audio;Utility;
+Keywords=focusrite;scarlett;mute;led;

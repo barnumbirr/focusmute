@@ -1,0 +1,1688 @@
+{
+  "enums": {
+    "maximum_array_sizes": {
+      "enumerators": {
+        "kMAX_NUMBER_OUTPUTS": 2,
+        "kMAX_NUMBER_INPUTS": 2,
+        "kMAX_OutputPairs": 1,
+        "kDeviceNameSz": 32,
+        "kAPP_STORAGE_SZ": 2048,
+        "kMAX_PREAMP_CHANNELS": 2,
+        "kMAX_NUMBER_ENDLESS_POTS": 2,
+        "kMAX_NUMBER_LEDS": 40,
+        "kNUMBER_METERING_SEGMENTS": 25,
+        "kNUMBER_AUTOGAIN_DEBUG_STATS": 6,
+        "kNUMBER_AIRPLUS_BAND_COEFFS": 24,
+        "kSIZE_VEGAS_BUFFER": 6,
+        "kSIZE_VEGAS_UPDATE": 4,
+        "kMAX_NUMBER_MIXER_INPUTS": 4,
+        "kMAX_NUMBER_MIXES": 2,
+        "kPEAK_LENGTH": 66
+      }
+    },
+    "StateEventID": {
+      "enumerators": {
+        "factoryTestModeUnsetFromFCP": 0,
+        "factoryTestMode1SetFromFCP": 1,
+        "factoryTestMode2SetFromFCP": 2,
+        "lowVoltageDetected": 3,
+        "vegasHasFinished": 4,
+        "enterGainState": 5,
+        "enterVegas": 6,
+        "numberOfStateEvents": 7
+      }
+    },
+    "AutogainResult": {
+      "enumerators": {
+        "eAGExitCodeSuccess": 0,
+        "eAGExitCodeSuccessDRover": 1,
+        "eAGSuccessCodesEnd": 1,
+        "eAGExitCodeWarnMinGainLimit": 2,
+        "eAGValidGainEnd": 2,
+        "eAGExitCodeFailDRunder": 3,
+        "eAGExitCodeFailMaxGainLimit": 4,
+        "eAGExitCodeClipped": 5,
+        "eAGExitCancelled": 6,
+        "eAGExitRoot": 7,
+        "eAGExitTotalNumExitCodes": 8
+      }
+    },
+    "eClipSafeStatus": {
+      "enumerators": {
+        "eClipSafeOnBoot": 0,
+        "eClipSafeIsWaiting": 1,
+        "eClipSafeInvalidSampleRate": 2,
+        "eClipSafeNormal": 3,
+        "eClipSafeTotalNumExitCodes": 4
+      }
+    },
+    "eDEV_FCP_USER_MESSAGE_TYPE": {
+      "enumerators": {
+        "eNO_MESSAGE": 0,
+        "eMSG_VOLUME": 1,
+        "eMSG_SWITCH": 2,
+        "eMSG_SWITCH_CTRL": 3,
+        "eMSG_FLASH_CTRL": 4,
+        "eMSG_DIRECT_LED_CONTROL": 5,
+        "eMSG_MONITORING_CONTROL": 6,
+        "eMSG_FACTORY_TEST_MODE": 7,
+        "eMSG_DIRECT_SINGLE_LED": 8,
+        "eMSG_UPDATE_COLORS": 9,
+        "eMSG_AUTOGAIN": 10,
+        "eMSG_PHANTOM_POWER": 11,
+        "eMSG_INPUT_GAIN": 12,
+        "eMSG_INPUT_INST": 13,
+        "eMSG_CLIP_SAFE": 14,
+        "eMSG_INPUT_AIR": 15,
+        "eMSG_DIRECT_MONITORING": 16,
+        "eMSG_SELECT_CHANNEL": 17,
+        "eMSG_LINK_CHANNEL": 18,
+        "eMSG_METERING": 19,
+        "eMSG_RESET": 20,
+        "eMSG_METER_THRESHOLDS": 21,
+        "eMSG_SET_CLIPSAFE_CTRL": 22,
+        "eMSG_PREAMP_ZC_DETECT": 23,
+        "eMSG_LOG_LISTEN_ID": 24,
+        "eMSG_METER_BALLISTICS": 25,
+        "eMSG_AUTOGAIN_MAX_GAIN": 26,
+        "eMSG_AUTOGAIN_PEAKS": 27,
+        "eMSG_DAC_MUTE": 28,
+        "eMSG_AG_MEAN_TARGET": 29,
+        "eMSG_AG_PEAK_TARGET": 30,
+        "eMSG_VEGAS_BUF": 31,
+        "eMSG_VEGAS_UPD": 32,
+        "eMSG_VEGAS_CTRL": 33,
+        "eMSG_SET_AIRPLUS_PARAM": 34,
+        "eMSG_AIR_PLUS_USES_AIR": 35,
+        "eMSG_FLASH_CTRL_DEFERRED": 36,
+        "eMSG_BRIGHTNESS": 37,
+        "eMSG_FP_SLEEP": 38,
+        "eMSG_FP_SLEEP_TIME": 39,
+        "eMSG_END": 40
+      }
+    },
+    "eDeferredFXStatus": {
+      "enumerators": {
+        "eFXOff": 0,
+        "eFXOn": 1,
+        "eFXEnableDelayed": 2,
+        "eFXDisableDelayed": 3
+      }
+    },
+    "eDEV_FCP_NOTIFY_MESSAGE_TYPE": {
+      "enumerators": {
+        "FCP_NOTIFY_CLIPSAFE": 2097152,
+        "FCP_NOTIFY_AUTOGAIN_CHANGE": 4194304,
+        "FCP_NOTIFY_INPUT_AIR_CHANGE": 8388608,
+        "FCP_NOTIFY_DIRECT_MONITORING_CHANGE": 16777216,
+        "FCP_NOTIFY_CHANNEL_LINKING_CHANGE": 33554432,
+        "FCP_NOTIFY_SELECT_PREAMP": 33554432,
+        "FCP_NOTIFY_INST_INPUT_CHANGE": 67108864,
+        "FCP_NOTIFY_PHANTOM_POWER_CHANGE": 134217728,
+        "FCP_NOTIFY_USB2_CHANGE": 268435456,
+        "FCP_NOTIFY_TRS_INPUT_CHANGE": 536870912,
+        "FCP_NOTIFY_INPUT_GAIN_CHANGE": 1073741824,
+        "FCP_NOTIFY_LOW_VOLTAGE_DETECT": 2147483648
+      }
+    },
+    "eBrightnessMode": {
+      "enumerators": {
+        "eBrightness_High": 0,
+        "eBrightness_Medium": 1,
+        "eBrightness_Low": 2,
+        "eBrightness_Default": 0,
+        "eNumBrightnessModes": 3
+      },
+      "type": "uint8"
+    },
+    "eDIRECT_LED_MODE": {
+      "enumerators": {
+        "eDirectLEDModeOff": 0,
+        "eDirectLEDModeAll": 1,
+        "eDirectLEDModeHalosOnly": 2
+      }
+    },
+    "eAIR_MODE": {
+      "enumerators": {
+        "eAirModeOff": 0,
+        "eAirModeAir": 1,
+        "eAirModeAirPlus": 2,
+        "eAirModeEnd": 3
+      }
+    },
+    "eDIRECT_MONITORING_MODE": {
+      "enumerators": {
+        "eDirectMonitoringOff": 0,
+        "eDirectMonitoringMono": 1,
+        "eDirectMonitoringStereo": 2,
+        "eDirectMonitoringEnd": 3
+      }
+    },
+    "eMIXER_INPUTS": {
+      "enumerators": {
+        "eMixerInput_USB1": 0,
+        "eMixerInput_USB2": 1,
+        "eMixerInput_PreampCh1": 2,
+        "eMixerInput_PreampCh2": 3,
+        "eMixerInput_DSP1": 4,
+        "eMixerInput_DSP2": 5
+      }
+    },
+    "eMIXER_OUTPUTS": {
+      "enumerators": {
+        "eMixerOutput_MonitorL": 0,
+        "eMixerOutput_MonitorR": 1,
+        "eMixerOutput_LoopbackL": 2,
+        "eMixerOutput_LoopbackR": 3,
+        "eMixerOutput_DSP1": 4,
+        "eMixerOutput_DSP2": 5
+      }
+    },
+    "eANALOGUE_INPUTS": {
+      "enumerators": {
+        "eAnalogueInput_PreampCh1": 0,
+        "eAnalogueInput_PreampCh2": 1
+      }
+    },
+    "eANALOGUE_OUTPUTS": {
+      "enumerators": {
+        "eAnalogueOutput_MonitorL": 0,
+        "eAnalogueOutput_MonitorR": 1
+      }
+    },
+    "eUSB_INPUTS": {
+      "enumerators": {
+        "eUSBInput_Input1": 0,
+        "eUSBInput_Input2": 1,
+        "eUSBInput_Loopback1": 2,
+        "eUSBInput_Loopback2": 3
+      }
+    },
+    "eUSB_OUTPUTS": {
+      "enumerators": {
+        "eUSBOutput_Output1": 0,
+        "eUSBOutput_Output2": 1
+      }
+    }
+  },
+  "structs": {
+    "routerEntry": {
+      "members": {
+        "pos": {
+          "type": "uint32",
+          "offset": 0,
+          "size": 4,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null
+        },
+        "value": {
+          "type": "uint32",
+          "offset": 4,
+          "size": 4,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null
+        }
+      },
+      "parameter-buffer": null
+    },
+    "appSpaceAirPlusParams": {
+      "members": {
+        "distortionVolume": {
+          "type": "uint32",
+          "offset": 0,
+          "size": 4,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null
+        },
+        "levelCompensation": {
+          "type": "uint32",
+          "offset": 4,
+          "size": 4,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null
+        },
+        "bandpassCoeffs": {
+          "type": "uint32",
+          "offset": 8,
+          "size": 96,
+          "array-shape": [
+            24
+          ],
+          "notify-device": null,
+          "notify-client": null
+        }
+      },
+      "parameter-buffer": null
+    },
+    "appSpaceMixerChannelParams": {
+      "members": {
+        "levelDb": {
+          "type": "int8",
+          "offset": 0,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "range": {
+            "min": -128,
+            "max": 0
+          }
+        },
+        "pan": {
+          "type": "int8",
+          "offset": 1,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "range": {
+            "min": -128,
+            "max": 127
+          }
+        },
+        "mute": {
+          "type": "bool",
+          "offset": 2,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null
+        },
+        "solo": {
+          "type": "bool",
+          "offset": 3,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null
+        },
+        "effectiveMute": {
+          "type": "bool",
+          "offset": 4,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null
+        }
+      },
+      "parameter-buffer": null
+    },
+    "appSpaceClipSafeParams": {
+      "members": {
+        "digitalGainMaxdB": {
+          "type": "uint8",
+          "offset": 0,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null
+        },
+        "threshdBFS": {
+          "type": "uint8",
+          "offset": 1,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null
+        },
+        "analogSettlems": {
+          "type": "uint8",
+          "offset": 2,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null
+        },
+        "drcDelayMicros": {
+          "type": "uint32",
+          "offset": 4,
+          "size": 4,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null
+        },
+        "compressorRelease": {
+          "type": "uint32",
+          "offset": 8,
+          "size": 4,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null
+        }
+      },
+      "parameter-buffer": null
+    },
+    "APP_SPACE": {
+      "members": {
+        "configSize": {
+          "type": "uint32",
+          "offset": 0,
+          "size": 4,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "versionMajor": {
+          "type": "uint16",
+          "offset": 4,
+          "size": 2,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "versionMinor": {
+          "type": "uint16",
+          "offset": 6,
+          "size": 2,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "versionStageRelease": {
+          "type": "uint32",
+          "offset": 8,
+          "size": 4,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "versionBuildNr": {
+          "type": "uint32",
+          "offset": 12,
+          "size": 4,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "name": {
+          "type": "uint8",
+          "offset": 16,
+          "size": 32,
+          "array-shape": [
+            32
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "bootAndJTAGMode": {
+          "type": "uint8",
+          "offset": 48,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false,
+          "bits": {
+            "isJtagLocked": 6,
+            "isFirmwareEncrypted": 7
+          }
+        },
+        "outputVol": {
+          "type": "int16",
+          "offset": 50,
+          "size": 4,
+          "array-shape": [
+            2
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "outputMute": {
+          "type": "uint8",
+          "offset": 54,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": 28,
+          "notify-client": null,
+          "set-via-parameter-buffer": true
+        },
+        "outputCtrl": {
+          "type": "uint8",
+          "offset": 56,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "outputMono": {
+          "type": "uint8",
+          "offset": 58,
+          "size": 1,
+          "array-shape": [
+            1
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "monitorPad": {
+          "type": "uint8",
+          "offset": 59,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "instInput": {
+          "type": "uint8",
+          "offset": 60,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": 13,
+          "notify-client": 67108864,
+          "set-via-parameter-buffer": true
+        },
+        "inputAir": {
+          "type": "uint8",
+          "offset": 62,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": 15,
+          "notify-client": 8388608,
+          "set-via-parameter-buffer": true
+        },
+        "audioConfig": {
+          "type": "uint8",
+          "offset": 64,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "enableStandalone": {
+          "type": "uint8",
+          "offset": 65,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "peakHoldCount": {
+          "type": "uint8",
+          "offset": 66,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "standSyncSource": {
+          "type": "uint16",
+          "offset": 68,
+          "size": 2,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "standSampleRate": {
+          "type": "uint16",
+          "offset": 70,
+          "size": 2,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "enablePhantomPower": {
+          "type": "uint8",
+          "offset": 72,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": 11,
+          "notify-client": 134217728,
+          "set-via-parameter-buffer": true
+        },
+        "enableMSD": {
+          "type": "uint8",
+          "offset": 73,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "enablePhantomPersist": {
+          "type": "uint8",
+          "offset": 74,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "preampInputGain": {
+          "type": "uint8",
+          "offset": 75,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": 12,
+          "notify-client": 1073741824,
+          "set-via-parameter-buffer": true
+        },
+        "enableDirectLEDMode": {
+          "type": "uint8",
+          "offset": 77,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "directLEDChannel": {
+          "type": "uint8",
+          "offset": 78,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "directLEDDevice": {
+          "type": "uint8",
+          "offset": 80,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "directMonitorMainOffset": {
+          "type": "uint8",
+          "offset": 81,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": 6,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "directMonitorAltOffset": {
+          "type": "uint8",
+          "offset": 82,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "currentFrontPanelState": {
+          "type": "uint8",
+          "offset": 83,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "directLEDColour": {
+          "type": "uint32",
+          "offset": 84,
+          "size": 4,
+          "array-shape": null,
+          "notify-device": 8,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "directLEDIndex": {
+          "type": "uint8",
+          "offset": 88,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": 8,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "factoryTestMode": {
+          "type": "uint8",
+          "offset": 89,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": 7,
+          "notify-client": null,
+          "set-via-parameter-buffer": true
+        },
+        "factoryTestSwitchesBitmap": {
+          "type": "uint8",
+          "offset": 90,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "directLEDValues": {
+          "type": "uint32",
+          "offset": 92,
+          "size": 160,
+          "array-shape": [
+            40
+          ],
+          "notify-device": 5,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "parameterValue": {
+          "type": "uint8",
+          "offset": 252,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "parameterChannel": {
+          "type": "uint8",
+          "offset": 253,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "vegasBuffer": {
+          "type": "uint32",
+          "offset": 256,
+          "size": 24,
+          "array-shape": [
+            6
+          ],
+          "notify-device": 31,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "vegasUpdate": {
+          "type": "uint32",
+          "offset": 280,
+          "size": 16,
+          "array-shape": [
+            4
+          ],
+          "notify-device": 32,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "vegasControl": {
+          "type": "uint8",
+          "offset": 296,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": 33,
+          "notify-client": null,
+          "set-via-parameter-buffer": true
+        },
+        "meterBallistics": {
+          "type": "uint8",
+          "offset": 297,
+          "size": 4,
+          "array-shape": [
+            4
+          ],
+          "notify-device": 25,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "EPFifoFull": {
+          "type": "uint8",
+          "offset": 301,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "FCPFifoFull": {
+          "type": "uint8",
+          "offset": 302,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "inputMutes": {
+          "type": "uint8",
+          "offset": 303,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "meanTargetNegDBFS": {
+          "type": "uint8",
+          "offset": 305,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": 29,
+          "notify-client": 4194304,
+          "set-via-parameter-buffer": true
+        },
+        "peakTargetNegDBFS": {
+          "type": "uint8",
+          "offset": 306,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": 30,
+          "notify-client": 4194304,
+          "set-via-parameter-buffer": true
+        },
+        "autogainUsePeak": {
+          "type": "uint8",
+          "offset": 307,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": 27,
+          "notify-client": null,
+          "set-via-parameter-buffer": true
+        },
+        "autogainSetMaxGain": {
+          "type": "uint8",
+          "offset": 308,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": 26,
+          "notify-client": null,
+          "set-via-parameter-buffer": true
+        },
+        "autogainInProgress": {
+          "type": "uint8",
+          "offset": 309,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": 10,
+          "notify-client": 4194304,
+          "set-via-parameter-buffer": true
+        },
+        "autogainExitStatus": {
+          "type": "uint8",
+          "offset": 311,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": 10,
+          "notify-client": 4194304,
+          "set-via-parameter-buffer": false
+        },
+        "autogainStats": {
+          "type": "int8",
+          "offset": 313,
+          "size": 12,
+          "array-shape": [
+            2,
+            6
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "autogainVersion": {
+          "type": "uint8",
+          "offset": 325,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "clipSafe": {
+          "type": "uint8",
+          "offset": 327,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": 14,
+          "notify-client": 2097152,
+          "set-via-parameter-buffer": true
+        },
+        "meteringEnabled": {
+          "type": "uint8",
+          "offset": 329,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": 19,
+          "notify-client": null,
+          "set-via-parameter-buffer": true
+        },
+        "directMonitoring": {
+          "type": "uint8",
+          "offset": 330,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": 16,
+          "notify-client": 16777216,
+          "set-via-parameter-buffer": true
+        },
+        "selectedInput": {
+          "type": "uint8",
+          "offset": 331,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": 17,
+          "notify-client": 33554432,
+          "set-via-parameter-buffer": true
+        },
+        "digitalMute": {
+          "type": "uint8",
+          "offset": 332,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "inputChannelsLink": {
+          "type": "uint8",
+          "offset": 334,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": 18,
+          "notify-client": 33554432,
+          "set-via-parameter-buffer": true
+        },
+        "endlessPotAdcValue": {
+          "type": "uint32",
+          "offset": 336,
+          "size": 8,
+          "array-shape": [
+            2
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "usb2Connected": {
+          "type": "uint8",
+          "offset": 344,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": 268435456,
+          "set-via-parameter-buffer": false
+        },
+        "inputTRSPresent": {
+          "type": "uint8",
+          "offset": 345,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": null,
+          "notify-client": 536870912,
+          "set-via-parameter-buffer": false
+        },
+        "inLowVoltageState": {
+          "type": "uint8",
+          "offset": 347,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": 2147483648,
+          "set-via-parameter-buffer": false
+        },
+        "lowVoltagePinValue": {
+          "type": "uint8",
+          "offset": 348,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": 2147483648,
+          "set-via-parameter-buffer": false
+        },
+        "LEDthresholds": {
+          "type": "uint8",
+          "offset": 349,
+          "size": 25,
+          "array-shape": [
+            25
+          ],
+          "notify-device": 21,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "totalSecondsCounter": {
+          "type": "uint32",
+          "offset": 376,
+          "size": 4,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "powerCycleCounter": {
+          "type": "uint32",
+          "offset": 380,
+          "size": 4,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "LEDcolors": {
+          "type": "uint32",
+          "offset": 384,
+          "size": 44,
+          "array-shape": [
+            11
+          ],
+          "notify-device": 9,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "appCallbackMaxCycles": {
+          "type": "uint32",
+          "offset": 428,
+          "size": 8,
+          "array-shape": [
+            2
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "flashCallbackMaxCycles": {
+          "type": "uint32",
+          "offset": 436,
+          "size": 8,
+          "array-shape": [
+            2
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "logListenId": {
+          "type": "uint8",
+          "offset": 444,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": 24,
+          "notify-client": null,
+          "set-via-parameter-buffer": true
+        },
+        "logFlags": {
+          "type": "uint8",
+          "offset": 445,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "logValues1": {
+          "type": "uint32",
+          "offset": 448,
+          "size": 32,
+          "array-shape": [
+            8
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "logValues2": {
+          "type": "uint32",
+          "offset": 480,
+          "size": 32,
+          "array-shape": [
+            8
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "clipSafeParams": {
+          "type": "appSpaceClipSafeParams",
+          "offset": 512,
+          "size": 12,
+          "array-shape": null,
+          "notify-device": 22,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "clipSafedroppeddB": {
+          "type": "uint8",
+          "offset": 524,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "clipSafeVersion": {
+          "type": "uint8",
+          "offset": 526,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "airPlusParams": {
+          "type": "appSpaceAirPlusParams",
+          "offset": 528,
+          "size": 104,
+          "array-shape": null,
+          "notify-device": 34,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "airPlusUsesAir": {
+          "type": "uint8",
+          "offset": 632,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": 35,
+          "notify-client": null,
+          "set-via-parameter-buffer": true
+        },
+        "previouslySelectedAirMode": {
+          "type": "uint8",
+          "offset": 634,
+          "size": 2,
+          "array-shape": [
+            2
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "mixerState": {
+          "type": "appSpaceMixerChannelParams",
+          "offset": 636,
+          "size": 40,
+          "array-shape": [
+            2,
+            4
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "monoDirectMonitorMixCoeffs": {
+          "type": "uint16",
+          "offset": 676,
+          "size": 16,
+          "array-shape": [
+            2,
+            4
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false,
+          "range": {
+            "min": 0,
+            "max": 16384
+          }
+        },
+        "stereoDirectMonitorMixCoeffs": {
+          "type": "uint16",
+          "offset": 692,
+          "size": 16,
+          "array-shape": [
+            2,
+            4
+          ],
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false,
+          "range": {
+            "min": 0,
+            "max": 16384
+          }
+        },
+        "previouslySelectedDirectMonitorMode": {
+          "type": "uint8",
+          "offset": 708,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "loopbackMirrorsDirectMonitorMix": {
+          "type": "bool",
+          "offset": 709,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        },
+        "ffEdition": {
+          "type": "bool",
+          "offset": 710,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": null,
+          "notify-client": null,
+          "set-via-parameter-buffer": false,
+          "access-policy": "read-only"
+        },
+        "brightness": {
+          "type": "eBrightnessMode",
+          "offset": 711,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": 37,
+          "notify-client": null,
+          "set-via-parameter-buffer": true
+        },
+        "frontPanelSleep": {
+          "type": "bool",
+          "offset": 712,
+          "size": 1,
+          "array-shape": null,
+          "notify-device": 38,
+          "notify-client": null,
+          "set-via-parameter-buffer": true
+        },
+        "frontPanelSleepTime": {
+          "type": "uint32",
+          "offset": 716,
+          "size": 4,
+          "array-shape": null,
+          "notify-device": 39,
+          "notify-client": null,
+          "set-via-parameter-buffer": false
+        }
+      },
+      "parameter-buffer": {
+        "index": "parameterChannel",
+        "value": "parameterValue"
+      }
+    }
+  },
+  "device-specification": {
+    "metadata-version": null,
+    "product-name": "Scarlett 2i2 4th Gen",
+    "available-sample-rates": [
+      44100,
+      48000,
+      88200,
+      96000,
+      176400,
+      192000
+    ],
+    "physical-inputs": [
+      {
+        "name": "Analogue 1",
+        "type": "analogue",
+        "router-pin": 128,
+        "controls": {
+          "air": {
+            "struct": "APP_SPACE",
+            "member": "inputAir",
+            "index": 0
+          },
+          "phantom-power": {
+            "struct": "APP_SPACE",
+            "member": "enablePhantomPower",
+            "index": null
+          },
+          "instrument": {
+            "struct": "APP_SPACE",
+            "member": "instInput",
+            "index": 0
+          },
+          "clip-safe": {
+            "struct": "APP_SPACE",
+            "member": "clipSafe",
+            "index": 0
+          },
+          "preamp-gain": {
+            "struct": "APP_SPACE",
+            "member": "preampInputGain",
+            "index": 0
+          },
+          "auto-gain": {
+            "struct": "APP_SPACE",
+            "member": "autogainInProgress",
+            "index": 0
+          },
+          "auto-gain-exit-status": {
+            "struct": "APP_SPACE",
+            "member": "autogainExitStatus",
+            "index": 0
+          },
+          "channel-link": {
+            "struct": "APP_SPACE",
+            "member": "inputChannelsLink",
+            "index": 0
+          }
+        }
+      },
+      {
+        "name": "Analogue 2",
+        "type": "analogue",
+        "router-pin": 129,
+        "controls": {
+          "air": {
+            "struct": "APP_SPACE",
+            "member": "inputAir",
+            "index": 1
+          },
+          "phantom-power": {
+            "struct": "APP_SPACE",
+            "member": "enablePhantomPower",
+            "index": null
+          },
+          "instrument": {
+            "struct": "APP_SPACE",
+            "member": "instInput",
+            "index": 1
+          },
+          "clip-safe": {
+            "struct": "APP_SPACE",
+            "member": "clipSafe",
+            "index": 1
+          },
+          "preamp-gain": {
+            "struct": "APP_SPACE",
+            "member": "preampInputGain",
+            "index": 1
+          },
+          "auto-gain": {
+            "struct": "APP_SPACE",
+            "member": "autogainInProgress",
+            "index": 1
+          },
+          "auto-gain-exit-status": {
+            "struct": "APP_SPACE",
+            "member": "autogainExitStatus",
+            "index": 1
+          },
+          "channel-link": {
+            "struct": "APP_SPACE",
+            "member": "inputChannelsLink",
+            "index": 1
+          }
+        }
+      },
+      {
+        "name": "USB 1",
+        "type": "host",
+        "router-pin": 1536,
+        "controls": {}
+      },
+      {
+        "name": "USB 2",
+        "type": "host",
+        "router-pin": 1537,
+        "controls": {}
+      }
+    ],
+    "physical-outputs": [
+      {
+        "name": "Monitor 1",
+        "type": "analogue",
+        "router-pin": 128,
+        "controls": {
+          "level": {
+            "struct": "APP_SPACE",
+            "member": "outputVol",
+            "index": 0
+          }
+        }
+      },
+      {
+        "name": "Monitor 2",
+        "type": "analogue",
+        "router-pin": 129,
+        "controls": {
+          "level": {
+            "struct": "APP_SPACE",
+            "member": "outputVol",
+            "index": 1
+          }
+        }
+      },
+      {
+        "name": "USB 1",
+        "type": "host",
+        "router-pin": 1536,
+        "controls": {}
+      },
+      {
+        "name": "USB 2",
+        "type": "host",
+        "router-pin": 1537,
+        "controls": {}
+      },
+      {
+        "name": "Loopback 1",
+        "type": "host",
+        "router-pin": 1538,
+        "controls": {}
+      },
+      {
+        "name": "Loopback 2",
+        "type": "host",
+        "router-pin": 1539,
+        "controls": {}
+      }
+    ],
+    "sources": [
+      {
+        "name": "Analogue 1",
+        "type": "analogue",
+        "router-pin": 128,
+        "controls": {
+          "air": {
+            "struct": "APP_SPACE",
+            "member": "inputAir",
+            "index": 0
+          },
+          "phantom-power": {
+            "struct": "APP_SPACE",
+            "member": "enablePhantomPower",
+            "index": null
+          },
+          "instrument": {
+            "struct": "APP_SPACE",
+            "member": "instInput",
+            "index": 0
+          },
+          "clip-safe": {
+            "struct": "APP_SPACE",
+            "member": "clipSafe",
+            "index": 0
+          },
+          "preamp-gain": {
+            "struct": "APP_SPACE",
+            "member": "preampInputGain",
+            "index": 0
+          },
+          "auto-gain": {
+            "struct": "APP_SPACE",
+            "member": "autogainInProgress",
+            "index": 0
+          },
+          "auto-gain-exit-status": {
+            "struct": "APP_SPACE",
+            "member": "autogainExitStatus",
+            "index": 0
+          },
+          "channel-link": {
+            "struct": "APP_SPACE",
+            "member": "inputChannelsLink",
+            "index": 0
+          }
+        }
+      },
+      {
+        "name": "Analogue 2",
+        "type": "analogue",
+        "router-pin": 129,
+        "controls": {
+          "air": {
+            "struct": "APP_SPACE",
+            "member": "inputAir",
+            "index": 1
+          },
+          "phantom-power": {
+            "struct": "APP_SPACE",
+            "member": "enablePhantomPower",
+            "index": null
+          },
+          "instrument": {
+            "struct": "APP_SPACE",
+            "member": "instInput",
+            "index": 1
+          },
+          "clip-safe": {
+            "struct": "APP_SPACE",
+            "member": "clipSafe",
+            "index": 1
+          },
+          "preamp-gain": {
+            "struct": "APP_SPACE",
+            "member": "preampInputGain",
+            "index": 1
+          },
+          "auto-gain": {
+            "struct": "APP_SPACE",
+            "member": "autogainInProgress",
+            "index": 1
+          },
+          "auto-gain-exit-status": {
+            "struct": "APP_SPACE",
+            "member": "autogainExitStatus",
+            "index": 1
+          },
+          "channel-link": {
+            "struct": "APP_SPACE",
+            "member": "inputChannelsLink",
+            "index": 1
+          }
+        }
+      },
+      {
+        "name": "USB 1",
+        "type": "host",
+        "router-pin": 1536,
+        "controls": {}
+      },
+      {
+        "name": "USB 2",
+        "type": "host",
+        "router-pin": 1537,
+        "controls": {}
+      },
+      {
+        "name": "Mixer 1",
+        "type": "mixer",
+        "router-pin": 768,
+        "controls": {},
+        "mixer-output-index": 0
+      },
+      {
+        "name": "Mixer 2",
+        "type": "mixer",
+        "router-pin": 769,
+        "controls": {},
+        "mixer-output-index": 1
+      },
+      {
+        "name": "Mixer 3",
+        "type": "mixer",
+        "router-pin": 770,
+        "controls": {},
+        "mixer-output-index": 2
+      },
+      {
+        "name": "Mixer 4",
+        "type": "mixer",
+        "router-pin": 771,
+        "controls": {},
+        "mixer-output-index": 3
+      },
+      {
+        "name": "DSP 1",
+        "type": "dsp",
+        "router-pin": 772,
+        "controls": {}
+      },
+      {
+        "name": "DSP 2",
+        "type": "dsp",
+        "router-pin": 773,
+        "controls": {}
+      }
+    ],
+    "stereo-sources": [
+      {
+        "name": "USB 1 - 2",
+        "left": "USB 1",
+        "right": "USB 2",
+        "controls": {}
+      }
+    ],
+    "destinations": [
+      {
+        "name": "Monitor 1",
+        "type": "analogue",
+        "router-pin": 128,
+        "controls": {
+          "level": {
+            "struct": "APP_SPACE",
+            "member": "outputVol",
+            "index": 0
+          }
+        }
+      },
+      {
+        "name": "Monitor 2",
+        "type": "analogue",
+        "router-pin": 129,
+        "controls": {
+          "level": {
+            "struct": "APP_SPACE",
+            "member": "outputVol",
+            "index": 1
+          }
+        }
+      },
+      {
+        "name": "USB 1",
+        "type": "host",
+        "router-pin": 1536,
+        "controls": {}
+      },
+      {
+        "name": "USB 2",
+        "type": "host",
+        "router-pin": 1537,
+        "controls": {}
+      },
+      {
+        "name": "Loopback 1",
+        "type": "host",
+        "router-pin": 1538,
+        "controls": {}
+      },
+      {
+        "name": "Loopback 2",
+        "type": "host",
+        "router-pin": 1539,
+        "controls": {}
+      },
+      {
+        "name": "Mixer 1",
+        "type": "mixer",
+        "router-pin": 768,
+        "controls": {},
+        "mixer-input-index": 0
+      },
+      {
+        "name": "Mixer 2",
+        "type": "mixer",
+        "router-pin": 769,
+        "controls": {},
+        "mixer-input-index": 1
+      },
+      {
+        "name": "Mixer 3",
+        "type": "mixer",
+        "router-pin": 770,
+        "controls": {},
+        "mixer-input-index": 2
+      },
+      {
+        "name": "Mixer 4",
+        "type": "mixer",
+        "router-pin": 771,
+        "controls": {},
+        "mixer-input-index": 3
+      },
+      {
+        "name": "DSP 1",
+        "type": "dsp",
+        "router-pin": 772,
+        "controls": {}
+      },
+      {
+        "name": "DSP 2",
+        "type": "dsp",
+        "router-pin": 773,
+        "controls": {}
+      }
+    ],
+    "stereo-destinations": [
+      {
+        "name": "Monitor 1 - 2",
+        "left": "Monitor 1",
+        "right": "Monitor 2",
+        "controls": {}
+      },
+      {
+        "name": "Loopback",
+        "left": "Loopback 1",
+        "right": "Loopback 2",
+        "controls": {}
+      }
+    ],
+    "clocks": [
+      {
+        "name": "Internal",
+        "id": 41
+      }
+    ],
+    "mixes": [
+      {
+        "name": "Direct Monitor",
+        "mixer-source-left": "Mixer 1",
+        "mixer-source-right": "Mixer 2"
+      },
+      {
+        "name": "Loopback",
+        "mixer-source-left": "Mixer 3",
+        "mixer-source-right": "Mixer 4"
+      }
+    ]
+  }
+}

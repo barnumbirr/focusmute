@@ -1,0 +1,78 @@
+[package]
+name = "focusmute"
+version = "0.1.0"
+edition = "2024"
+description = "Hotkey mute control for Focusrite Scarlett interfaces"
+authors = ["Martin Simon"]
+license = "Apache-2.0"
+repository = "https://github.com/barnumbirr/focusmute"
+homepage = "https://github.com/barnumbirr/focusmute"
+
+[[bin]]
+name = "focusmute"
+path = "src/main.rs"
+
+[[bin]]
+name = "focusmute-cli"
+path = "src/main_cli.rs"
+
+[dependencies]
+focusmute-lib = { path = "../focusmute-lib" }
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0.149"
+log = "0.4"
+env_logger = "0.11"
+
+[target.'cfg(not(windows))'.dependencies]
+ctrlc = "3"
+
+# Tray app dependencies — shared across Windows and Linux
+[target.'cfg(any(windows, target_os = "linux"))'.dependencies]
+tray-icon = "0.19"
+muda = "0.15"
+global-hotkey = "0.6"
+image = { version = "0.25", default-features = false, features = ["png", "ico"] }
+rodio = { version = "0.20", default-features = false, features = ["wav"] }
+auto-launch = "0.5"
+notify-rust = "4"
+eframe = { version = "0.31", default-features = false, features = ["glow", "default_fonts", "x11", "wayland"] }
+rfd = "0.15"
+single-instance = "0.3"
+
+# Linux-only dependencies
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+
+# Windows-only dependencies
+[target.'cfg(windows)'.dependencies]
+winreg = "0.10"
+windows = { version = "0.61", features = [
+    "Win32_System_Console",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+] }
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
+
+[dev-dependencies]
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"
+
+[package.metadata.deb]
+name = "focusmute"
+maintainer = "Martin Simon"
+depends = "$auto, libpulse0, libgtk-3-0, libappindicator3-1, libegl1"
+section = "sound"
+priority = "optional"
+assets = [
+    ["target/release/focusmute", "usr/bin/", "755"],
+    ["target/release/focusmute-cli", "usr/bin/", "755"],
+    ["../../dist/linux/99-focusrite.rules", "etc/udev/rules.d/", "644"],
+    ["../../dist/linux/focusmute.desktop", "usr/share/applications/", "644"],
+    ["../../dist/linux/focusmute-cli.desktop", "usr/share/applications/", "644"],
+    ["../../LICENSE", "usr/share/doc/focusmute/", "644"],
+]
+maintainer-scripts = "../../dist/linux/debian/"

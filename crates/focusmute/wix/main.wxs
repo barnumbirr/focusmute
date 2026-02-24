@@ -1,0 +1,123 @@
+<?xml version='1.0' encoding='windows-1252'?>
+<?if $(sys.BUILDARCH) = x64 or $(sys.BUILDARCH) = arm64 ?>
+    <?define PlatformProgramFilesFolder = "ProgramFiles64Folder" ?>
+<?else ?>
+    <?define PlatformProgramFilesFolder = "ProgramFilesFolder" ?>
+<?endif ?>
+
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+
+    <Product
+        Id='*'
+        Name='Focusmute'
+        UpgradeCode='7EF4FD9F-060A-4CD0-B76D-5821DA45C11B'
+        Manufacturer='Martin Simon'
+        Language='1033'
+        Codepage='1252'
+        Version='$(var.Version)'>
+
+        <Package Id='*'
+            Keywords='Installer'
+            Description='Focusmute — Scarlett 4th Gen LED mute indicator'
+            Manufacturer='Martin Simon'
+            InstallerVersion='450'
+            Languages='1033'
+            Compressed='yes'
+            InstallScope='perMachine'
+            SummaryCodepage='1252' />
+
+        <MajorUpgrade
+            Schedule='afterInstallInitialize'
+            DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.' />
+
+        <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1' />
+        <Property Id='DiskPrompt' Value='Focusmute Installation' />
+
+        <Directory Id='TARGETDIR' Name='SourceDir'>
+            <Directory Id='$(var.PlatformProgramFilesFolder)' Name='PFiles'>
+                <Directory Id='APPLICATIONFOLDER' Name='Focusmute'>
+
+                    <Component Id='FocusmuteExe' Guid='*'>
+                        <File
+                            Id='FocusmuteExeFile'
+                            Name='focusmute.exe'
+                            DiskId='1'
+                            Source='$(var.CargoTargetBinDir)\focusmute.exe'
+                            KeyPath='yes' />
+                    </Component>
+
+                    <Component Id='FocusmuteCli' Guid='*'>
+                        <File
+                            Id='FocusmuteCliFile'
+                            Name='focusmute-cli.exe'
+                            DiskId='1'
+                            Source='$(var.CargoTargetBinDir)\focusmute-cli.exe'
+                            KeyPath='yes' />
+                    </Component>
+
+                    <Component Id='PathEntry' Guid='5A6AF08E-C824-422D-BBB2-1E25FC0EF8D5' KeyPath='yes'>
+                        <Environment
+                            Id='PATH'
+                            Name='PATH'
+                            Value='[APPLICATIONFOLDER]'
+                            Permanent='no'
+                            Part='last'
+                            Action='set'
+                            System='yes' />
+                    </Component>
+
+                </Directory>
+            </Directory>
+
+            <Directory Id='ProgramMenuFolder' Name='Programs'>
+                <Directory Id='ApplicationProgramsFolder' Name='Focusmute'>
+                    <Component Id='StartMenuShortcut' Guid='*'>
+                        <Shortcut
+                            Id='FocusmuteShortcut'
+                            Name='Focusmute'
+                            Description='Scarlett 4th Gen LED mute indicator'
+                            Target='[APPLICATIONFOLDER]focusmute.exe'
+                            WorkingDirectory='APPLICATIONFOLDER'
+                            Icon='ProductIcon' />
+                        <RemoveFolder Id='CleanUpShortcutFolder' On='uninstall' />
+                        <RegistryValue
+                            Root='HKCU'
+                            Key='Software\Focusmute'
+                            Name='installed'
+                            Type='integer'
+                            Value='1'
+                            KeyPath='yes' />
+                    </Component>
+                </Directory>
+            </Directory>
+        </Directory>
+
+        <Feature Id='MainFeature' Title='Focusmute' Description='Install Focusmute tray app and CLI.'
+            Level='1' ConfigurableDirectory='APPLICATIONFOLDER'
+            AllowAdvertise='no' Display='expand' Absent='disallow'>
+
+            <ComponentRef Id='FocusmuteExe' />
+            <ComponentRef Id='FocusmuteCli' />
+            <ComponentRef Id='StartMenuShortcut' />
+
+            <Feature Id='PathFeature' Title='PATH Environment Variable'
+                Description='Add install location to the PATH system environment variable.'
+                Level='1' Absent='allow'>
+                <ComponentRef Id='PathEntry' />
+            </Feature>
+
+        </Feature>
+
+        <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONFOLDER]' After='CostFinalize' />
+        <Property Id='ARPHELPLINK' Value='https://github.com/barnumbirr/focusmute' />
+
+        <Icon Id='ProductIcon' SourceFile='$(var.CargoTargetBinDir)\focusmute.exe' />
+        <Property Id='ARPPRODUCTICON' Value='ProductIcon' />
+
+        <UI>
+            <UIRef Id='WixUI_FeatureTree' />
+        </UI>
+        <WixVariable Id='WixUILicenseRtf' Value='crates\focusmute\wix\License.rtf' />
+
+    </Product>
+</Wix>

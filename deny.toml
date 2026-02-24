@@ -1,0 +1,21 @@
+# cargo-deny configuration
+# https://embarkstudios.github.io/cargo-deny/
+
+[advisories]
+# GTK3 Rust bindings are unmaintained — the entire gtk-rs GTK3 ecosystem
+# (gtk, gdk, glib, atk, cairo-rs, pango, gdk-pixbuf, gio) has been superseded
+# by GTK4 bindings. Migration to gtk4 is tracked but not feasible for v0.1.0
+# since tray-icon/muda/libappindicator still depend on GTK3.
+#
+# The glib unsoundness (GHSA-wrw7-89jp-8q8g) affects VariantStrIter which
+# this project does not use.
+ignore = [
+    "RUSTSEC-2024-0412", # glib — unmaintained
+    "RUSTSEC-2024-0413", # atk — unmaintained
+    "RUSTSEC-2024-0415", # cairo-rs — unmaintained
+    "RUSTSEC-2024-0416", # gdk — unmaintained
+    "RUSTSEC-2024-0418", # gdk-pixbuf — unmaintained
+    "RUSTSEC-2024-0419", # pango — unmaintained
+    "RUSTSEC-2024-0420", # gtk — unmaintained
+    "RUSTSEC-2024-0370", # proc-macro-error — unmaintained (used by gtk-rs)
+]

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Focusmute
+Comment=Hotkey mute control for Focusrite Scarlett 4th Gen interfaces
+Exec=focusmute
+Terminal=false
+Categories=AudioVideo;Audio;Utility;
+Keywords=focusrite;scarlett;mute;led;
