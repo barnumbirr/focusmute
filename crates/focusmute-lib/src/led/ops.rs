@@ -108,7 +108,7 @@ mod tests {
             number_leds: vec![0],
             mute_colors: vec![],
             selected_color: 0x20FF_0000,
-            unselected_color: 0xFFFF_FF00,
+            unselected_color: 0x88FF_FF00,
         }
     }
 
@@ -118,7 +118,7 @@ mod tests {
             number_leds: vec![0, 8],
             mute_colors: vec![],
             selected_color: 0x20FF_0000,
-            unselected_color: 0xFFFF_FF00,
+            unselected_color: 0x88FF_FF00,
         }
     }
 
@@ -215,7 +215,7 @@ mod tests {
             number_leds: vec![0, 8],
             mute_colors: vec![0x00FF_0000, 0x0000_FF00],
             selected_color: 0x20FF_0000,
-            unselected_color: 0xFFFF_FF00,
+            unselected_color: 0x88FF_FF00,
         };
 
         apply_mute_indicator(&dev, &strategy, 0xFF00_0000).unwrap();
@@ -274,7 +274,7 @@ mod tests {
         let colour = descs.get(&OFF_DIRECT_LED_COLOUR).unwrap();
         assert_eq!(
             u32::from_le_bytes(colour[..4].try_into().unwrap()),
-            0xFFFF_FF00,
+            0x88FF_FF00,
             "should restore to unselected (white)"
         );
     }
@@ -307,7 +307,7 @@ mod tests {
         let colour = descs.get(&OFF_DIRECT_LED_COLOUR).unwrap();
         assert_eq!(
             u32::from_le_bytes(colour[..4].try_into().unwrap()),
-            0xFFFF_FF00,
+            0x88FF_FF00,
             "last LED restored should be unselected (white)"
         );
     }

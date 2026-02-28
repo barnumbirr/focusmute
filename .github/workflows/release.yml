@@ -66,6 +66,36 @@ jobs:
       - name: Build MSI installer
         run: cargo wix -p focusmute --no-build --nocapture
 
+      # Code signing via SignPath Foundation (free for open source).
+      # Skipped gracefully when SIGNPATH_API_TOKEN is not configured.
+      # To enable: add SIGNPATH_API_TOKEN secret and update the org/project/policy slugs.
+      - name: Upload unsigned artifacts for signing
+        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-signing-package
+          path: |
+            target/release/focusmute.exe
+            target/release/focusmute-cli.exe
+            target/wix/*.msi
+
+      - name: Sign Windows artifacts (SignPath)
+        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORG_ID }}
+          project-slug: focusmute
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: windows-release
+          github-artifact-id: ${{ steps.upload-signing.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed-artifacts
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:

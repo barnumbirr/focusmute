@@ -23,7 +23,7 @@ pub const DEFAULT_NUMBER_LED_SELECTED: u32 = 0x20FF_0000;
 ///
 /// Common across all Scarlett 4th Gen models. Used as fallback when
 /// no `ModelProfile` is available (predicted layout path).
-pub const DEFAULT_NUMBER_LED_UNSELECTED: u32 = 0xFFFF_FF00;
+pub const DEFAULT_NUMBER_LED_UNSELECTED: u32 = 0x88FF_FF00;
 
 /// LED index range for a single input or output halo.
 #[derive(Debug)]
@@ -102,7 +102,7 @@ static SCARLETT_2I2: ModelProfile = ModelProfile {
     input_halos: &SCARLETT_2I2_INPUT_HALOS,
     output_halo_segments: 16..27,
     number_led_selected: 0x20FF_0000, // Green (firmware is 0x40FF, adjusted to match visually)
-    number_led_unselected: 0xFFFF_FF00, // White
+    number_led_unselected: 0x88FF_FF00, // White (tuned to match firmware appearance)
     button_labels: &[
         "Select button LED 1",         // 27
         "Inst button",                 // 28

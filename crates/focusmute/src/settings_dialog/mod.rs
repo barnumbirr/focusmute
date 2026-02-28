@@ -11,6 +11,7 @@
 //! Returns `Some(new_config)` on Save, `None` on Cancel/close.
 
 use focusmute_lib::config::Config;
+use focusmute_lib::device::DeviceInfo;
 use focusmute_lib::models::ModelProfile;
 
 #[cfg(any(windows, target_os = "linux"))]
@@ -64,13 +65,29 @@ pub(crate) fn combo_to_mute_inputs(index: usize, input_count: usize) -> String {
 /// This is modal — blocks the calling thread until the dialog is closed.
 ///
 /// Must be called from the main thread (eframe/winit requirement).
-pub fn show_settings(config: &Config, model: Option<&ModelProfile>) -> Option<Config> {
+pub fn show_settings(
+    config: &Config,
+    model: Option<&ModelProfile>,
+    device_info: Option<&DeviceInfo>,
+) -> Option<Config> {
     #[cfg(any(windows, target_os = "linux"))]
     {
         use std::sync::{Arc, Mutex};
 
         let config_clone = config.clone();
         let input_count = model.map_or(0, |m| m.input_count);
+
+        let mut device_lines: Vec<(String, String)> = Vec::new();
+        if let Some(info) = device_info {
+            device_lines.push(("Device".into(), info.model().to_string()));
+            device_lines.push(("Firmware".into(), info.firmware.to_string()));
+            if let Some(ref serial) = info.serial {
+                device_lines.push(("Serial".into(), serial.clone()));
+            }
+        } else {
+            device_lines.push(("Device".into(), "not connected".into()));
+        }
+
         let result: Arc<Mutex<Option<Config>>> = Arc::new(Mutex::new(None));
         let result_for_app = result.clone();
 
@@ -89,6 +106,7 @@ pub fn show_settings(config: &Config, model: Option<&ModelProfile>) -> Option<Co
                 Ok(Box::new(ui::SettingsApp::new(
                     config_clone,
                     input_count,
+                    device_lines,
                     result_for_app,
                     cc,
                 )))
@@ -103,7 +121,7 @@ pub fn show_settings(config: &Config, model: Option<&ModelProfile>) -> Option<Co
 
     #[cfg(not(any(windows, target_os = "linux")))]
     {
-        let _ = (config, model);
+        let _ = (config, model, device_info);
         log::warn!("Settings dialog is not available on this platform.");
         None
     }

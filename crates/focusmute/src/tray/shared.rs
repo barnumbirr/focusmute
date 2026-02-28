@@ -41,9 +41,6 @@ pub trait PlatformAdapter {
 
     /// Block until the next platform event or a reasonable timeout.
     fn wait_for_events();
-
-    /// Label for the autostart menu item, e.g. `"Start with Windows"`.
-    fn autostart_label() -> &'static str;
 }
 
 /// Shared tray event loop.
@@ -54,10 +51,20 @@ pub trait PlatformAdapter {
 pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
     P::platform_init()?;
 
-    // Open device and initialise shared state
+    // Open device and initialise shared state.
+    // If the device isn't connected yet, start with a no-op strategy and
+    // let the reconnect loop pick it up later.
     let config = Config::load();
-    let initial_device = open_device_by_serial(&config.device_serial)?;
-    let mut state = TrayState::init(&initial_device)?;
+    let (mut state, mut device) = match open_device_by_serial(&config.device_serial) {
+        Ok(dev) => {
+            let st = TrayState::init_with_config(config, &dev)?;
+            (st, Some(dev))
+        }
+        Err(e) => {
+            log::warn!("No device at startup ({e}) — starting without device");
+            (TrayState::init_without_device(config), None)
+        }
+    };
 
     // Create audio monitor on the main thread
     let main_monitor: Option<Arc<P::Monitor>> = P::create_monitor().map(Arc::new);
@@ -65,7 +72,6 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
     // Check initial mute state
     let initial_muted = main_monitor.as_ref().is_some_and(|m| m.is_muted());
 
-    let mut device = Some(initial_device);
     if initial_muted && let Some(ref dev) = device {
         state.set_initial_muted(true, dev);
     }
@@ -74,9 +80,13 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
     let mut resources = TrayResources::init(&state.config)?;
 
     // Build tray menu and icon
-    let (menu, tray_menu) =
-        state::build_tray_menu(&state.config, initial_muted, P::autostart_label());
+    let (menu, tray_menu) = state::build_tray_menu(&state.config, initial_muted);
     let tray = state::build_tray_icon(initial_muted, menu)?;
+
+    // If no device at startup, show disconnected status immediately
+    if device.is_none() {
+        tray_menu.set_device_connected(false);
+    }
 
     // Channel for background → main thread communication
     let (tx, rx): (mpsc::Sender<Msg>, Receiver<Msg>) = mpsc::channel();

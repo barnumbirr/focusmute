@@ -1,6 +1,7 @@
 # Focusmute
 
-Hotkey mute control for Focusrite Scarlett 4th Gen interfaces.  
+Hotkey mute control for Focusrite Scarlett 4th Gen interfaces.
+
 Focusmute monitors your system microphone's mute state and reflects it on your Focusrite Scarlett interface LEDs in real time. When you mute, the input number indicator LEDs ("1", "2") turn your chosen color (default: red). When you unmute, they are restored to their firmware colors (green for the selected input, white for unselected). Metering halos and all other LEDs are never touched. It runs as a system tray app on Windows and Linux with hotkey support, or as a CLI on both platforms.
 
 ## Features
@@ -8,7 +9,7 @@ Focusmute monitors your system microphone's mute state and reflects it on your F
 - Configurable mute indicator color (any hex color or named color)
 - Global hotkey toggle (default: Ctrl+Shift+M)
 - Sound feedback on mute/unmute (built-in or custom WAV)
-- Auto-reconnect on device disconnect (exponential backoff)
+- Auto-reconnect on device disconnect (exponential backoff) and graceful startup without device
 - Desktop notifications on mute/unmute (optional)
 - Hook commands on mute state change (run arbitrary shell commands)
 - Per-input targeting (all input number LEDs, or specific ones like "1" or "1,2")
@@ -65,7 +66,7 @@ See [dist/linux/README-linux.md](dist/linux/README-linux.md) for full details an
 
 ### Tray App (Windows + Linux)
 
-Launch `focusmute` (or `focusmute.exe` on Windows). It sits in the system tray, monitors your mic, and updates LEDs automatically. Right-click for the menu (Status, Toggle Mute, Sound Feedback, Autostart, Settings, Reconnect Device, About, Quit). The global hotkey (default: Ctrl+Shift+M) toggles mute.
+Launch `focusmute` (or `focusmute.exe` on Windows). It sits in the system tray, monitors your mic, and updates LEDs automatically. Right-click for the menu (Status, Toggle Mute, Settings, Reconnect Device, Quit). The global hotkey (default: Ctrl+Shift+M) toggles mute. If no Scarlett device is connected at startup, the app starts in "Disconnected" mode and automatically connects when the device is plugged in.
 
 **Linux notes:** The tray app uses GTK 3. Global hotkeys work on X11; on Wayland they may not function (use the tray menu instead).
 
@@ -197,7 +198,6 @@ focusmute/
         │   ├── state.rs                Tray state, menu, hotkey management
         │   ├── windows.rs              Windows adapter: Win32 message pump
         │   └── linux.rs                Linux adapter: GTK event loop
-        ├── about_dialog.rs             About dialog (egui / eframe)
         └── sound.rs                    Pre-decoded audio playback
 ```
 

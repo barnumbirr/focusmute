@@ -6,8 +6,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 #[cfg(any(windows, target_os = "linux"))]
-mod about_dialog;
-#[cfg(any(windows, target_os = "linux"))]
 mod icon;
 #[cfg(any(windows, target_os = "linux"))]
 mod settings_dialog;

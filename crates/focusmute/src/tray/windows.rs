@@ -74,10 +74,6 @@ impl PlatformAdapter for WindowsAdapter {
             MsgWaitForMultipleObjects(None, false, 50, QS_ALLINPUT);
         }
     }
-
-    fn autostart_label() -> &'static str {
-        "Start with Windows"
-    }
 }
 
 pub fn run() -> focusmute_lib::error::Result<()> {

@@ -135,7 +135,7 @@ mod tests {
                 number_leds: vec![0, 8],
                 mute_colors: vec![],
                 selected_color: 0x20FF_0000,
-                unselected_color: 0xFFFF_FF00,
+                unselected_color: 0x88FF_FF00,
             },
         )
     }
@@ -321,7 +321,7 @@ mod tests {
             number_leds: vec![0],
             mute_colors: vec![],
             selected_color: 0x20FF_0000,
-            unselected_color: 0xFFFF_FF00,
+            unselected_color: 0x88FF_FF00,
         };
         ind.set_strategy(new_strategy);
         assert!(

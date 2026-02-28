@@ -78,7 +78,7 @@ sudo apt-get install libpulse-dev pkg-config libasound2-dev libgtk-3-dev libxdo-
 - **Icon embedding**: `build.rs` uses `winresource` to embed `icon-live.ico` into `focusmute.exe` (visible in Windows Search, taskbar, Explorer)
 - **What it installs**: `focusmute.exe` + `focusmute-cli.exe` to `Program Files\Focusmute`
 - **Built on**: `windows-latest` runner (native; WiX requires Windows)
-- **Output**: `target/wix/focusmute-0.1.0-x86_64.msi`
+- **Output**: `target/wix/focusmute-<version>-x86_64.msi`
 
 ### Linux: .deb Package (cargo-deb)
 
@@ -99,7 +99,7 @@ sudo apt-get install libpulse-dev pkg-config libasound2-dev libgtk-3-dev libxdo-
 - **Post-install**: `postinst` reloads udev rules (`udevadm control --reload-rules && udevadm trigger`)
 - **Section**: `sound`
 - **Build command**: `cargo deb -p focusmute --no-build` (after `cargo build --release`)
-- **Output**: `target/debian/focusmute_0.1.0-1_amd64.deb`
+- **Output**: `target/debian/focusmute_<version>-1_amd64.deb`
 - **Target distros**: Debian, Ubuntu, Linux Mint, Pop!_OS
 
 ### Linux: tar.gz Archive (universal fallback)
@@ -158,7 +158,7 @@ Installs `libpulse-dev`, `pkg-config`, `libasound2-dev`, `libgtk-3-dev`, `libxdo
 
 ### Release Workflow (`.github/workflows/release.yml`)
 
-Triggers on tag push matching `v*` (e.g., `v0.1.0`).
+Triggers on tag push matching `v*` (e.g., `v0.2.0`).
 
 | Job | Runner | What it does |
 |-----|--------|--------------|
@@ -170,7 +170,7 @@ Triggers on tag push matching `v*` (e.g., `v0.1.0`).
 Uses `cargo-bins/cargo-binstall@main` to download pre-built `cargo-wix` and `cargo-deb` binaries (faster than compiling from source via `cargo install`).
 
 **Release process**:
-1. Tag a commit: `git tag v0.1.0 && git push --tags`
+1. Tag a commit: `git tag v<version> && git push --tags`
 2. `check` runs first (lint, test, audit)
 3. Both platform build jobs run in parallel after `check` passes
 4. `publish` job waits for both, downloads artifacts, creates the GitHub Release

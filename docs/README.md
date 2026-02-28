@@ -38,7 +38,7 @@ Focusrite Control 2 is a native desktop application for controlling Focusrite au
 22. **Descriptor Schema Fully Decoded**: Base64+zlib compressed JSON schema (25KB) retrieved from firmware via cmd `0x000D0800`. Contains complete APP_SPACE structure with all field names, types, offsets, sizes, and notification settings.
 23. **Notification Gap Identified**: `enableDirectLEDMode` has `notify-device: null` — firmware is never notified when this field changes via SET_DESCR. This likely explains why enabling direct LED mode doesn't produce visible changes. Testing alternative notification mechanisms (parameter buffer, direct color writes).
 24. **LED HALO COLOR CONTROL: SOLVED**: Writing to `LEDcolors[]` (descriptor offset 384, 11 x u32, `notify-device:9`) via SET_DESCR changes all LED halo colors immediately. No `enableDirectLEDMode` or brightness change needed. Color format is `0xRRGGBB00` (RGB shifted left 8 bits). Full color cycling confirmed: RED, ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE, MAGENTA, WHITE all display correctly.
-25. **Color Format Decoded**: `(R << 24) | (G << 16) | (B << 8)` — lowest byte unused. `0xFF000000` = RED, `0x00FF0000` = GREEN, `0x0000FF00` = BLUE, `0xFFFFFF00` = WHITE (slight pink tint from LED hardware). Confirmed with 9 colors.
+25. **Color Format Decoded**: `(R << 24) | (G << 16) | (B << 8)` — lowest byte unused. `0xFF000000` = RED, `0x00FF0000` = GREEN, `0x0000FF00` = BLUE, `0xFFFFFF00` = WHITE (renders with pink tint from LED hardware; visually calibrated to `0x88FFFF00` for true white appearance). Confirmed with 9 colors.
 26. **LEDcolors Semantics**: The 11-entry array is a metering gradient palette. At low/no signal, only `LEDcolors[0]` (base color) is visible. Higher indices correspond to higher signal levels.
 27. **Restore Mechanism**: Writing back the original descriptor bytes `[384..428]` restores the normal metering color gradient.
 28. **Direct LED Mode: FUNCTIONAL**: Requires DATA_NOTIFY(5) after SET_DESCR writes. `enableDirectLEDMode=2` + `directLEDValues` works — gives solid base color on halos. (Earlier testing without DATA_NOTIFY incorrectly concluded this was non-functional.)
@@ -173,8 +173,9 @@ See [09-led-control-api-discovery.md](09-led-control-api-discovery.md) for the L
    - **Sound feedback** on mute/unmute (built-in sounds + configurable custom WAV paths)
    - **Desktop notifications** on mute/unmute (optional, via `notifications_enabled`)
    - **Hook commands** — run shell commands on mute/unmute (`on_mute_command`, `on_unmute_command`)
-   - **System tray icon** on Windows (Win32) and Linux (GTK) with context menu (status, toggle, sound, autostart, settings, reconnect, about, quit)
-   - **Settings dialog** — mute color, hotkey, sound toggle, custom sound paths, mute inputs, autostart (cross-platform egui/eframe)
+   - **System tray icon** on Windows (Win32) and Linux (GTK) with context menu (status, toggle, settings, reconnect, quit)
+   - **Graceful no-device startup** — starts without a Scarlett device, shows "Disconnected" in tray, reconnects automatically when device appears
+   - **Settings dialog** — mute color, hotkey, sound toggle, custom sound paths, mute inputs, autostart, device info (cross-platform egui/eframe)
    - **CLI tool** — `focusmute-cli` with `status`, `config`, `devices`, `monitor`, `probe`, `map`, `predict`, `descriptor`, `mute`, `unmute` subcommands; `--json` flag for scripting
 
 7. **Button LED color calibration** — NOT NEEDED. Focusmute's default mode (`mute_inputs=all`) uses the metering gradient approach, which uses the native firmware rendering path. Per-input mute uses the single-LED update mechanism (DATA_NOTIFY(8)) which targets only the number indicator LEDs and avoids the `directLEDValues` bulk rendering path entirely.

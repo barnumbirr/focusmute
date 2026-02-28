@@ -17,7 +17,7 @@ use focusmute_lib::reconnect::ReconnectState;
 
 use auto_launch::AutoLaunchBuilder;
 use global_hotkey::{GlobalHotKeyManager, hotkey::HotKey};
-use muda::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use muda::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIconBuilder};
 
 use crate::sound;
@@ -183,12 +183,6 @@ pub fn get_auto_launch() -> Option<auto_launch::AutoLaunch> {
         .ok()
 }
 
-pub fn is_autostart_enabled() -> bool {
-    get_auto_launch()
-        .and_then(|al| al.is_enabled().ok())
-        .unwrap_or(false)
-}
-
 pub fn set_autostart(enabled: bool) {
     if let Some(al) = get_auto_launch() {
         let result = if enabled { al.enable() } else { al.disable() };
@@ -204,11 +198,8 @@ pub fn set_autostart(enabled: bool) {
 pub struct TrayMenu {
     pub status_item: MenuItem,
     pub toggle_item: MenuItem,
-    pub sound_item: CheckMenuItem,
-    pub autostart_item: CheckMenuItem,
     pub settings_item: MenuItem,
     pub reconnect_item: MenuItem,
-    pub about_item: MenuItem,
     pub quit_item: MenuItem,
 }
 
@@ -222,36 +213,22 @@ impl TrayMenu {
 }
 
 /// Build the tray context menu with all standard items.
-///
-/// `autostart_label` should be `"Start with Windows"` or `"Start with System"` etc.
-pub fn build_tray_menu(
-    config: &Config,
-    initial_muted: bool,
-    autostart_label: &str,
-) -> (Menu, TrayMenu) {
+pub fn build_tray_menu(config: &Config, initial_muted: bool) -> (Menu, TrayMenu) {
     let menu = Menu::new();
     let initial_status = if initial_muted { "Muted" } else { "Live" };
     let status_item = MenuItem::new(initial_status, false, None);
     let toggle_label = format!("Toggle Mute\t{}", config.hotkey);
     let toggle_item = MenuItem::new(&toggle_label, true, None);
-    let sound_item = CheckMenuItem::new("Sound Feedback", true, config.sound_enabled, None);
-    let autostart_enabled = is_autostart_enabled();
-    let autostart_item = CheckMenuItem::new(autostart_label, true, autostart_enabled, None);
     let settings_item = MenuItem::new("Settings...", true, None);
     let reconnect_item = MenuItem::new("Reconnect Device", false, None);
-    let about_item = MenuItem::new("About Focusmute", true, None);
     let quit_item = MenuItem::new("Quit", true, None);
 
     let _ = menu.append(&status_item);
     let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&toggle_item);
     let _ = menu.append(&PredefinedMenuItem::separator());
-    let _ = menu.append(&sound_item);
-    let _ = menu.append(&autostart_item);
-    let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&settings_item);
     let _ = menu.append(&reconnect_item);
-    let _ = menu.append(&about_item);
     let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&quit_item);
 
@@ -260,11 +237,8 @@ pub fn build_tray_menu(
         TrayMenu {
             status_item,
             toggle_item,
-            sound_item,
-            autostart_item,
             settings_item,
             reconnect_item,
-            about_item,
             quit_item,
         },
     )
@@ -351,19 +325,11 @@ pub struct TrayState {
     pub config: Config,
     pub indicator: MuteIndicator,
     pub reconnect: ReconnectState,
-    pub ctx: DeviceContext,
+    pub ctx: Option<DeviceContext>,
 }
 
 impl TrayState {
-    /// Initialize tray state: load config, resolve context, build indicator.
-    ///
-    /// The caller is responsible for opening the device (via `open_device()`) and
-    /// querying the initial mute state from the platform audio API.
-    pub fn init(device: &impl ScarlettDevice) -> focusmute_lib::error::Result<Self> {
-        Self::init_with_config(Config::load(), device)
-    }
-
-    /// Initialize with a specific config.
+    /// Initialize with a specific config and a connected device.
     pub fn init_with_config(
         config: Config,
         device: &impl ScarlettDevice,
@@ -390,8 +356,56 @@ impl TrayState {
             config,
             indicator,
             reconnect: ReconnectState::with_defaults(),
-            ctx,
+            ctx: Some(ctx),
         })
+    }
+
+    /// Initialize without a device — uses a no-op strategy (empty LED vectors).
+    ///
+    /// The `MuteIndicator` still exists and debounces mute state, but LED
+    /// writes are no-ops because `number_leds` is empty. Call
+    /// [`reinit_device_context`] when a device becomes available.
+    pub fn init_without_device(config: Config) -> Self {
+        let init_mute_color = led::mute_color_or_default(&config);
+        let noop_strategy = led::MuteStrategy {
+            input_indices: vec![],
+            number_leds: vec![],
+            mute_colors: vec![],
+            selected_color: 0,
+            unselected_color: 0,
+        };
+        let indicator = MuteIndicator::new(2, false, init_mute_color, noop_strategy);
+
+        TrayState {
+            config,
+            indicator,
+            reconnect: ReconnectState::with_defaults(),
+            ctx: None,
+        }
+    }
+
+    /// Resolve a `DeviceContext` from a newly connected device and replace the
+    /// no-op strategy with a real one. Returns config warnings (if any).
+    pub fn reinit_device_context(
+        &mut self,
+        device: &impl ScarlettDevice,
+    ) -> focusmute_lib::error::Result<Vec<String>> {
+        let ctx = DeviceContext::resolve(device, false)?;
+
+        let (_mute_mode, strategy, warnings) = led::resolve_strategy_from_config(
+            &mut self.config,
+            ctx.input_count(),
+            ctx.profile,
+            ctx.predicted.as_ref(),
+        )
+        .map_err(focusmute_lib::FocusmuteError::Config)?;
+        for w in &warnings {
+            log::warn!("[config] {w}");
+        }
+
+        self.indicator.set_strategy(strategy);
+        self.ctx = Some(ctx);
+        Ok(warnings)
     }
 
     /// Apply initial mute state (call after audio monitor is ready).
@@ -412,15 +426,47 @@ impl TrayState {
 
     /// Attempt device reconnection with backoff + LED state refresh.
     ///
+    /// When `ctx` is `Some` (device was previously connected), uses the normal
+    /// reconnect-and-refresh path. When `ctx` is `None` (never connected),
+    /// opens the device and calls [`reinit_device_context`] to resolve the
+    /// real strategy.
+    ///
     /// Returns the new device on success, `None` if not ready or failed.
     pub fn try_reconnect(&mut self) -> Option<focusmute_lib::device::PlatformDevice> {
-        focusmute_lib::reconnect::try_reconnect_and_refresh(
-            &mut self.reconnect,
-            self.indicator.strategy(),
-            self.indicator.mute_color(),
-            self.indicator.is_muted(),
-            &self.config.device_serial,
-        )
+        if self.ctx.is_some() {
+            // Normal reconnect: device was previously connected, strategy is valid.
+            focusmute_lib::reconnect::try_reconnect_and_refresh(
+                &mut self.reconnect,
+                self.indicator.strategy(),
+                self.indicator.mute_color(),
+                self.indicator.is_muted(),
+                &self.config.device_serial,
+            )
+        } else {
+            // First connect: no DeviceContext yet — open device and resolve context.
+            let dev = focusmute_lib::reconnect::try_reopen(
+                &mut self.reconnect,
+                &self.config.device_serial,
+            )?;
+            match self.reinit_device_context(&dev) {
+                Ok(warnings) => {
+                    for w in &warnings {
+                        log::warn!("[config] {w}");
+                    }
+                    // If currently muted, apply LEDs with the new real strategy.
+                    if self.indicator.is_muted()
+                        && let Err(e) = self.indicator.apply_mute(&dev)
+                    {
+                        log::warn!("could not apply mute after first connect: {e}");
+                    }
+                    Some(dev)
+                }
+                Err(e) => {
+                    log::warn!("could not resolve device context on first connect: {e}");
+                    None
+                }
+            }
+        }
     }
 
     /// Process a mute poll from the background thread. Returns the resulting action.
@@ -463,11 +509,15 @@ impl TrayState {
             || new_config.input_colors != self.config.input_colors
             || new_config.mute_color != self.config.mute_color
         {
+            let (input_count, profile, predicted) = match self.ctx.as_ref() {
+                Some(ctx) => (ctx.input_count(), ctx.profile, ctx.predicted.as_ref()),
+                None => (None, None, None),
+            };
             match led::resolve_strategy_from_config(
                 &mut new_config,
-                self.ctx.input_count(),
-                self.ctx.profile,
-                self.ctx.predicted.as_ref(),
+                input_count,
+                profile,
+                predicted,
             ) {
                 Ok((_mode, new_strategy, sw)) => {
                     warnings.extend(sw);
@@ -599,28 +649,17 @@ pub fn handle_menu_event(
         return true;
     } else if event.id() == menu.toggle_item.id() {
         toggle_mute_fn(state.indicator.is_muted());
-    } else if event.id() == menu.sound_item.id() {
-        state.config.sound_enabled = !state.config.sound_enabled;
-        if let Err(e) = state.config.save() {
-            log::warn!("config save: {e}");
-        }
-        menu.sound_item.set_checked(state.config.sound_enabled);
-    } else if event.id() == menu.autostart_item.id() {
-        let enabled = !menu.autostart_item.is_checked();
-        menu.autostart_item.set_checked(enabled);
-        set_autostart(enabled);
     } else if event.id() == menu.settings_item.id() {
+        let info = device.as_ref().map(|d| d.info());
+        let profile = state.ctx.as_ref().and_then(|c| c.profile);
         if let Some(new_config) =
-            crate::settings_dialog::show_settings(&state.config, state.ctx.profile)
+            crate::settings_dialog::show_settings(&state.config, profile, info)
         {
             let (warnings, mute_changed, unmute_changed, hotkey_changed, new_hotkey_str) =
                 state.handle_settings_result(new_config, device.as_ref());
             for w in &warnings {
                 log::warn!("[config] {w}");
             }
-
-            menu.sound_item.set_checked(state.config.sound_enabled);
-            menu.autostart_item.set_checked(state.config.autostart);
 
             if mute_changed {
                 resources.mute_sound =
@@ -637,9 +676,6 @@ pub fn handle_menu_event(
                     .set_text(format!("Toggle Mute\t{}", new_hotkey_str));
             }
         }
-    } else if event.id() == menu.about_item.id() {
-        let info = device.as_ref().map(|d| d.info());
-        crate::about_dialog::show_about(info);
     } else if event.id() == menu.reconnect_item.id() {
         state.reset_backoff();
         // Next loop iteration will attempt reconnect immediately
@@ -654,7 +690,7 @@ mod tests {
     use focusmute_lib::protocol::*;
 
     /// Create a MockDevice with the "Scarlett 2i2 4th Gen" name so that
-    /// TrayState::init succeeds (known profile, no schema extraction needed).
+    /// TrayState::init_with_config succeeds (known profile, no schema extraction needed).
     fn make_mock_device() -> MockDevice {
         let mut dev = MockDevice::new();
         dev.info_mut().device_name = "Scarlett 2i2 4th Gen-00031337".into();
@@ -1015,6 +1051,105 @@ mod tests {
         // Subsequent same-state polls: NoChange
         let (a3, _) = state.process_mute_poll(true, Some(&dev));
         assert!(matches!(a3, MonitorAction::NoChange));
+    }
+
+    // ── No-device startup tests ──
+
+    #[test]
+    fn init_without_device_creates_valid_state() {
+        let state = TrayState::init_without_device(Config::default());
+        assert!(state.ctx.is_none());
+        assert!(!state.indicator.is_muted());
+        // No-op strategy: empty vectors
+        assert!(state.indicator.strategy().input_indices.is_empty());
+        assert!(state.indicator.strategy().number_leds.is_empty());
+    }
+
+    #[test]
+    fn init_without_device_debounces() {
+        let mut state = TrayState::init_without_device(Config::default());
+
+        // Feed 2 muted polls (threshold=2) without any device
+        let (a1, lost1) = state.process_mute_poll(true, Option::<&MockDevice>::None);
+        assert!(matches!(a1, MonitorAction::NoChange));
+        assert!(!lost1);
+
+        let (a2, lost2) = state.process_mute_poll(true, Option::<&MockDevice>::None);
+        assert!(matches!(a2, MonitorAction::ApplyMute));
+        assert!(!lost2);
+        assert!(state.indicator.is_muted());
+    }
+
+    #[test]
+    fn reinit_device_context_populates_ctx() {
+        let mut state = TrayState::init_without_device(Config::default());
+        assert!(state.ctx.is_none());
+        assert!(state.indicator.strategy().input_indices.is_empty());
+
+        let dev = make_mock_device();
+        let warnings = state.reinit_device_context(&dev).unwrap();
+        assert!(warnings.is_empty());
+
+        // ctx should now be populated
+        assert!(state.ctx.is_some());
+        let ctx = state.ctx.as_ref().unwrap();
+        assert!(ctx.profile.is_some());
+        assert_eq!(ctx.input_count(), Some(2));
+
+        // Strategy should be real (non-empty)
+        assert!(!state.indicator.strategy().input_indices.is_empty());
+        assert_eq!(state.indicator.strategy().input_indices, &[0, 1]);
+    }
+
+    #[test]
+    fn apply_config_without_ctx_keeps_noop_strategy() {
+        let mut state = TrayState::init_without_device(Config::default());
+
+        // Change color — should succeed even without a device
+        let mut new_config = state.config.clone();
+        new_config.mute_color = "#00FF00".into();
+        let warnings = state.apply_config(new_config, Option::<&MockDevice>::None);
+
+        // Strategy re-resolution fails (no profile/predicted) but the warning
+        // is emitted and the no-op strategy is preserved.
+        assert!(!warnings.is_empty());
+        assert!(state.indicator.strategy().input_indices.is_empty());
+    }
+
+    #[test]
+    fn apply_config_without_ctx_color_only_no_reresolution() {
+        let mut state = TrayState::init_without_device(Config::default());
+
+        // Change only sound_enabled — should NOT trigger strategy re-resolution
+        let mut new_config = state.config.clone();
+        new_config.sound_enabled = false;
+        let warnings = state.apply_config(new_config, Option::<&MockDevice>::None);
+
+        // No warnings because strategy re-resolution wasn't attempted
+        assert!(warnings.is_empty());
+        assert!(!state.config.sound_enabled);
+    }
+
+    #[test]
+    fn reinit_then_mute_applies_leds() {
+        let mut state = TrayState::init_without_device(Config::default());
+
+        // Get muted while disconnected (no LED writes)
+        state.process_mute_poll(true, Option::<&MockDevice>::None);
+        state.process_mute_poll(true, Option::<&MockDevice>::None);
+        assert!(state.indicator.is_muted());
+
+        // Connect device
+        let dev = make_mock_device();
+        state.reinit_device_context(&dev).unwrap();
+
+        // Now apply mute — should write LEDs
+        let _ = state.indicator.apply_mute(&dev);
+        let descs = dev.descriptors.borrow();
+        assert!(
+            descs.contains_key(&OFF_DIRECT_LED_COLOUR),
+            "should write LED color after reinit"
+        );
     }
 
     // ── ICO decode tests ──

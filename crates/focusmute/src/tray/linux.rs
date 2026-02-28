@@ -74,10 +74,6 @@ impl PlatformAdapter for LinuxAdapter {
         // process non-GTK events (mute polls, menu, hotkeys).
         gtk::main_iteration_do(true);
     }
-
-    fn autostart_label() -> &'static str {
-        "Start with System"
-    }
 }
 
 pub fn run() -> focusmute_lib::error::Result<()> {

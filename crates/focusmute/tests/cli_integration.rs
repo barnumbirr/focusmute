@@ -3,11 +3,11 @@
 //! These tests exercise the CLI binary via `assert_cmd`, verifying that
 //! basic subcommands (help, version, config) produce expected output.
 
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
 
-fn cli() -> Command {
-    Command::cargo_bin("focusmute-cli").expect("binary should be built")
+fn cli() -> assert_cmd::Command {
+    cargo_bin_cmd!("focusmute-cli")
 }
 
 #[test]

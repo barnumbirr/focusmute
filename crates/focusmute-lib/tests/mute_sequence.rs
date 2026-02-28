@@ -17,7 +17,7 @@ fn make_strategy_both() -> led::MuteStrategy {
         number_leds: vec![0, 8],
         mute_colors: vec![],
         selected_color: 0x20FF_0000,
-        unselected_color: 0xFFFF_FF00,
+        unselected_color: 0x88FF_FF00,
     }
 }
 
@@ -28,7 +28,7 @@ fn make_strategy_input1() -> led::MuteStrategy {
         number_leds: vec![0],
         mute_colors: vec![],
         selected_color: 0x20FF_0000,
-        unselected_color: 0xFFFF_FF00,
+        unselected_color: 0x88FF_FF00,
     }
 }
 
@@ -78,7 +78,7 @@ fn full_mute_unmute_cycle() {
     let colour = descs.get(&OFF_DIRECT_LED_COLOUR).unwrap();
     let restored_color = u32::from_le_bytes(colour[..4].try_into().unwrap());
     assert_eq!(
-        restored_color, 0xFFFF_FF00,
+        restored_color, 0x88FF_FF00,
         "input 2 should restore to unselected (white)"
     );
     drop(descs);
@@ -127,7 +127,7 @@ fn rapid_mute_unmute_10_cycles() {
         let colour = descs.get(&OFF_DIRECT_LED_COLOUR).unwrap();
         let v = u32::from_le_bytes(colour[..4].try_into().unwrap());
         assert_eq!(
-            v, 0xFFFF_FF00,
+            v, 0x88FF_FF00,
             "cycle {cycle} unmute: input 2 should restore to white"
         );
         drop(descs);

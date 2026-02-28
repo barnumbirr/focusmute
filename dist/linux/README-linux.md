@@ -63,7 +63,7 @@ This installs both binaries, udev rules, and desktop entries automatically.
 focusmute
 ```
 
-Runs as a system tray icon. Right-click for the menu (Status, Toggle Mute, Sound Feedback, Start with System, Settings, Reconnect Device, About, Quit). The global hotkey (default: Ctrl+Shift+M) toggles mute. Works on X11; Wayland may not support global hotkeys (use the tray menu instead).
+Runs as a system tray icon. Right-click for the menu (Status, Toggle Mute, Settings, Reconnect Device, Quit). The global hotkey (default: Ctrl+Shift+M) toggles mute. Works on X11; Wayland may not support global hotkeys (use the tray menu instead). If no Scarlett device is connected at startup, the app starts in "Disconnected" mode and automatically connects when the device is plugged in.
 
 ### CLI
 
