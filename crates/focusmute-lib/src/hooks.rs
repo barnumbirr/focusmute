@@ -98,6 +98,10 @@ fn run_hook_with_timeout(command: &str, timeout: Duration) -> io::Result<ExitSta
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    /// Serializes tests that interact with the global HOOK_RUNNING flag.
+    static HOOK_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn run_hook_empty_command_is_noop() {
@@ -150,6 +154,7 @@ mod tests {
 
     #[test]
     fn run_hook_guard_skips_concurrent() {
+        let _lock = HOOK_TEST_LOCK.lock().unwrap();
         // Set the guard to simulate a running hook
         HOOK_RUNNING.store(true, Ordering::SeqCst);
         // run_hook should skip immediately (no spawn)
@@ -182,6 +187,7 @@ mod tests {
 
     #[test]
     fn run_action_hook_dispatches_commands() {
+        let _lock = HOOK_TEST_LOCK.lock().unwrap();
         wait_for_hook_idle();
 
         let dir = tempfile::tempdir().unwrap();
@@ -223,6 +229,7 @@ mod tests {
 
     #[test]
     fn hook_guard_resets_on_panic() {
+        let _lock = HOOK_TEST_LOCK.lock().unwrap();
         wait_for_hook_idle();
 
         // Spawn a thread that sets HOOK_RUNNING, creates a HookGuard, then panics.
