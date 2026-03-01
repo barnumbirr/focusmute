@@ -20,7 +20,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: linux-check
+          shared-key: linux
 
       - name: Install Linux dependencies
         uses: awalsh128/cache-apt-pkgs-action@latest
@@ -52,7 +52,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: windows-release
+          shared-key: windows
 
       - name: Build release binaries
         run: cargo build --release
@@ -116,7 +116,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: linux-release
+          shared-key: linux
 
       - name: Install Linux dependencies
         uses: awalsh128/cache-apt-pkgs-action@latest

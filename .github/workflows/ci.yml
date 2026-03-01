@@ -28,7 +28,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: linux-check
+          shared-key: linux
 
       - name: Install Linux dependencies
         uses: awalsh128/cache-apt-pkgs-action@latest
