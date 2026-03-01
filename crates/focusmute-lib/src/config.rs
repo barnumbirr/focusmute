@@ -1,11 +1,15 @@
 //! Application configuration — TOML-based, platform-aware paths.
 
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
+
+/// Header comment prepended to saved config files.
+const CONFIG_HEADER: &str =
+    "# Focusmute configuration — changes made outside the app may be overwritten.\n\n";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -96,7 +100,7 @@ impl Default for Config {
 /// Parsed mute input selection.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MuteInputs {
-    /// All halos via gradient (backward-compatible default).
+    /// All inputs.
     All,
     /// Specific inputs (0-indexed internally, parsed from 1-based user input).
     Specific(Vec<usize>),
@@ -105,7 +109,7 @@ pub enum MuteInputs {
 impl std::fmt::Display for MuteInputs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MuteInputs::All => write!(f, "all (gradient mode)"),
+            MuteInputs::All => write!(f, "all"),
             MuteInputs::Specific(inputs) => {
                 let names: Vec<String> = inputs.iter().map(|i| format!("{}", i + 1)).collect();
                 write!(f, "{} (per-input)", names.join(", "))
@@ -125,6 +129,8 @@ pub enum ValidationError {
     InvalidSoundPath { field: &'static str, reason: String },
     /// The `mute_inputs` field references inputs that don't exist on the device.
     InvalidMuteInputs(String),
+    /// An `input_colors` entry is invalid (bad color value or out-of-range key).
+    InvalidInputColor { input: String, reason: String },
 }
 
 impl fmt::Display for ValidationError {
@@ -136,6 +142,9 @@ impl fmt::Display for ValidationError {
                 write!(f, "Invalid {field}: {reason}")
             }
             ValidationError::InvalidMuteInputs(e) => write!(f, "Invalid mute inputs: {e}"),
+            ValidationError::InvalidInputColor { input, reason } => {
+                write!(f, "Invalid input_colors[{input}]: {reason}")
+            }
         }
     }
 }
@@ -158,54 +167,79 @@ impl Config {
         Self::dir().map(|d| d.join("config.toml"))
     }
 
+    /// Full path to the log file (tray app).
+    pub fn log_path() -> Option<PathBuf> {
+        Self::dir().map(|d| d.join("focusmute.log"))
+    }
+
     /// Load config from disk, or return defaults if not found.
     pub fn load() -> Self {
-        let Some(path) = Self::path() else {
-            return Self::default();
-        };
-        match std::fs::read_to_string(&path) {
-            Ok(contents) => match toml::from_str(&contents) {
-                Ok(config) => config,
-                Err(e) => {
-                    log::warn!(
-                        "config parse error ({}), using defaults: {e}",
-                        path.display()
-                    );
-                    Self::default()
-                }
-            },
-            Err(_) => Self::default(),
+        let (config, warnings) = Self::load_with_warnings();
+        for w in &warnings {
+            log::warn!("{w}");
+        }
+        config
+    }
+
+    /// Save config to an arbitrary path atomically (write to temp file, then rename).
+    ///
+    /// A header comment is prepended to warn that manual edits may be overwritten.
+    pub fn save_to(&self, path: &Path) -> std::io::Result<()> {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let serialized = toml::to_string_pretty(self).map_err(std::io::Error::other)?;
+        let contents = format!("{CONFIG_HEADER}{serialized}");
+        let tmp = path.with_extension("toml.tmp");
+        std::fs::write(&tmp, &contents)?;
+        match std::fs::rename(&tmp, path) {
+            Ok(()) => Ok(()),
+            Err(_) => {
+                // Rename can fail across filesystems; fall back to direct write + cleanup
+                let result = std::fs::write(path, &contents);
+                let _ = std::fs::remove_file(&tmp);
+                result
+            }
         }
     }
 
-    /// Save config to disk atomically (write to temp file, then rename).
-    ///
-    /// A header comment is prepended to warn that manual edits may be overwritten.
+    /// Save config to the default platform path.
     pub fn save(&self) -> std::io::Result<()> {
-        const CONFIG_HEADER: &str =
-            "# Focusmute configuration — changes made outside the app may be overwritten.\n\n";
-
-        let Some(dir) = Self::dir() else {
+        let Some(path) = Self::path() else {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 "No config directory",
             ));
         };
-        std::fs::create_dir_all(&dir)?;
-        let serialized = toml::to_string_pretty(self).map_err(std::io::Error::other)?;
-        let contents = format!("{CONFIG_HEADER}{serialized}");
-        let target = dir.join("config.toml");
-        let tmp = dir.join("config.toml.tmp");
-        std::fs::write(&tmp, &contents)?;
-        match std::fs::rename(&tmp, &target) {
-            Ok(()) => Ok(()),
-            Err(_) => {
-                // Rename can fail across filesystems; fall back to direct write + cleanup
-                let result = std::fs::write(&target, &contents);
-                let _ = std::fs::remove_file(&tmp);
-                result
-            }
+        self.save_to(&path)
+    }
+
+    /// Load config from an arbitrary path, returning the config and any parse warnings.
+    ///
+    /// Returns `(defaults, [])` if the file doesn't exist.
+    /// Returns `(defaults, [warning])` if the file exists but can't be parsed.
+    pub fn load_from(path: &Path) -> (Self, Vec<String>) {
+        match std::fs::read_to_string(path) {
+            Ok(contents) => match toml::from_str(&contents) {
+                Ok(config) => (config, vec![]),
+                Err(e) => {
+                    let warning = format!(
+                        "config parse error ({}), using defaults: {e}",
+                        path.display()
+                    );
+                    (Self::default(), vec![warning])
+                }
+            },
+            Err(_) => (Self::default(), vec![]),
         }
+    }
+
+    /// Load config from the default path, returning the config and any parse warnings.
+    pub fn load_with_warnings() -> (Self, Vec<String>) {
+        let Some(path) = Self::path() else {
+            return (Self::default(), vec![]);
+        };
+        Self::load_from(&path)
     }
 
     /// Parse the `mute_inputs` field into a `MuteInputs` enum.
@@ -324,6 +358,36 @@ impl Config {
             errors.push(ValidationError::InvalidMuteInputs(e.to_string()));
         }
 
+        // Validate input_colors entries
+        for (key, value) in &self.input_colors {
+            if let Err(e) = crate::led::parse_color(value) {
+                errors.push(ValidationError::InvalidInputColor {
+                    input: key.clone(),
+                    reason: e.to_string(),
+                });
+            }
+            if let Some(count) = input_count {
+                match key.parse::<usize>() {
+                    Ok(n) if n >= 1 && n <= count => {}
+                    Ok(n) => {
+                        errors.push(ValidationError::InvalidInputColor {
+                            input: key.clone(),
+                            reason: format!(
+                                "input {n} is out of range (device has {count} input{})",
+                                if count == 1 { "" } else { "s" }
+                            ),
+                        });
+                    }
+                    Err(_) => {
+                        errors.push(ValidationError::InvalidInputColor {
+                            input: key.clone(),
+                            reason: format!("key must be a 1-based input number, got \"{key}\""),
+                        });
+                    }
+                }
+            }
+        }
+
         if errors.is_empty() {
             Ok(())
         } else {
@@ -361,7 +425,7 @@ mod tests {
 
     #[test]
     fn display_mute_inputs_all() {
-        assert_eq!(MuteInputs::All.to_string(), "all (gradient mode)");
+        assert_eq!(MuteInputs::All.to_string(), "all");
     }
 
     #[test]
@@ -460,6 +524,14 @@ mod tests {
     fn config_path_ends_with_toml() {
         let path = Config::path().unwrap();
         assert_eq!(path.file_name().unwrap(), "config.toml");
+    }
+
+    #[test]
+    fn log_path_is_in_config_dir() {
+        let log = Config::log_path().unwrap();
+        let dir = Config::dir().unwrap();
+        assert_eq!(log.parent().unwrap(), dir);
+        assert_eq!(log.file_name().unwrap(), "focusmute.log");
     }
 
     #[test]
@@ -908,6 +980,69 @@ mute_inputs = "all"
         assert!(c.device_serial.is_empty());
     }
 
+    // ── input_colors validation ──
+
+    #[test]
+    fn validate_input_colors_valid() {
+        let c = Config {
+            input_colors: HashMap::from([
+                ("1".into(), "#FF0000".into()),
+                ("2".into(), "blue".into()),
+            ]),
+            ..Config::default()
+        };
+        assert!(c.validate(Some(2), 10_000_000).is_ok());
+    }
+
+    #[test]
+    fn validate_input_colors_invalid_color_value() {
+        let c = Config {
+            input_colors: HashMap::from([("1".into(), "not-a-color".into())]),
+            ..Config::default()
+        };
+        let errs = c.validate(Some(2), 10_000_000).unwrap_err();
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            ValidationError::InvalidInputColor { input, .. } if input == "1"
+        )));
+    }
+
+    #[test]
+    fn validate_input_colors_out_of_range_key() {
+        let c = Config {
+            input_colors: HashMap::from([("5".into(), "#FF0000".into())]),
+            ..Config::default()
+        };
+        let errs = c.validate(Some(2), 10_000_000).unwrap_err();
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            ValidationError::InvalidInputColor { reason, .. } if reason.contains("out of range")
+        )));
+    }
+
+    #[test]
+    fn validate_input_colors_non_numeric_key() {
+        let c = Config {
+            input_colors: HashMap::from([("abc".into(), "#FF0000".into())]),
+            ..Config::default()
+        };
+        let errs = c.validate(Some(2), 10_000_000).unwrap_err();
+        assert!(errs.iter().any(|e| matches!(
+            e,
+            ValidationError::InvalidInputColor { reason, .. } if reason.contains("1-based input number")
+        )));
+    }
+
+    #[test]
+    fn validate_input_colors_key_range_skipped_without_input_count() {
+        let c = Config {
+            input_colors: HashMap::from([("99".into(), "#FF0000".into())]),
+            ..Config::default()
+        };
+        // Without input_count, key range check is skipped (only color value is validated)
+        assert!(c.validate(None, 10_000_000).is_ok());
+    }
+
     #[test]
     fn load_ignores_header_comment() {
         // Config with header comment (as produced by save()) should parse fine
@@ -931,5 +1066,93 @@ notifications_enabled = false
         assert!(!c.sound_enabled);
         assert!(c.autostart);
         assert_eq!(c.mute_inputs, "1,2");
+    }
+
+    // ── save_to / load_from ──
+
+    #[test]
+    fn save_to_load_from_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+
+        let config = Config {
+            mute_color: "#00FF00".into(),
+            hotkey: "Alt+M".into(),
+            sound_enabled: false,
+            autostart: true,
+            mute_inputs: "1,2".into(),
+            mute_sound_path: "/tmp/mute.wav".into(),
+            unmute_sound_path: "/tmp/unmute.wav".into(),
+            device_serial: "ABC123".into(),
+            on_mute_command: "echo muted".into(),
+            on_unmute_command: "echo unmuted".into(),
+            input_colors: HashMap::from([
+                ("1".into(), "#FF0000".into()),
+                ("2".into(), "#0000FF".into()),
+            ]),
+            notifications_enabled: true,
+        };
+        config.save_to(&path).unwrap();
+
+        let (loaded, warnings) = Config::load_from(&path);
+        assert!(warnings.is_empty());
+        assert_eq!(loaded.mute_color, config.mute_color);
+        assert_eq!(loaded.hotkey, config.hotkey);
+        assert_eq!(loaded.sound_enabled, config.sound_enabled);
+        assert_eq!(loaded.autostart, config.autostart);
+        assert_eq!(loaded.mute_inputs, config.mute_inputs);
+        assert_eq!(loaded.mute_sound_path, config.mute_sound_path);
+        assert_eq!(loaded.unmute_sound_path, config.unmute_sound_path);
+        assert_eq!(loaded.device_serial, config.device_serial);
+        assert_eq!(loaded.on_mute_command, config.on_mute_command);
+        assert_eq!(loaded.on_unmute_command, config.on_unmute_command);
+        assert_eq!(loaded.input_colors, config.input_colors);
+        assert_eq!(loaded.notifications_enabled, config.notifications_enabled);
+    }
+
+    #[test]
+    fn save_to_includes_header_comment() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+
+        Config::default().save_to(&path).unwrap();
+        let contents = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            contents.starts_with("# Focusmute configuration"),
+            "saved file should start with header comment"
+        );
+    }
+
+    #[test]
+    fn save_to_cleans_up_tmp() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+
+        Config::default().save_to(&path).unwrap();
+        let tmp = dir.path().join("config.toml.tmp");
+        assert!(!tmp.exists(), "temp file should not remain after save");
+    }
+
+    #[test]
+    fn load_from_missing_file_returns_defaults() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nonexistent.toml");
+
+        let (config, warnings) = Config::load_from(&path);
+        assert!(warnings.is_empty());
+        assert_eq!(config.mute_color, "#FF0000");
+        assert_eq!(config.hotkey, "Ctrl+Shift+M");
+    }
+
+    #[test]
+    fn load_from_invalid_toml_returns_defaults_with_warning() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bad.toml");
+        std::fs::write(&path, "this is { not valid toml").unwrap();
+
+        let (config, warnings) = Config::load_from(&path);
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("config parse error"));
+        assert_eq!(config.mute_color, "#FF0000");
     }
 }

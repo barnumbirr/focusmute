@@ -12,7 +12,7 @@ Hidden inside the GET_DEVMAP response data (USB command 0x0080000D, initially mi
 3. Decompression revealed a JSON firmware schema with 87 descriptor fields, 17 enums, 5 structs
 4. Keyword search found: `kMAX_NUMBER_LEDS`, `directLEDColour`, `eDirectLEDModeHalosOnly`, `LEDcolors`, `eMSG_UPDATE_COLORS`
 
-> **Focusmute implementation note**: With `mute_inputs=all` (default), Focusmute uses the metering gradient approach (`LEDcolors[]` + DATA_NOTIFY(9)). With per-input mute (`mute_inputs=1`, `2`, `1,2`), it uses `directLEDValues` + DATA_NOTIFY(5) for targeted halo indication. The button LED side effects described in the "Button LED Categories" section below only apply to full direct LED mode usage (e.g., animations), not to Focusmute's per-input mute.
+> **Focusmute implementation note**: All mute modes use the single-LED update mechanism (`directLEDColour` + `directLEDIndex` + DATA_NOTIFY(8)) to color only the number indicator LEDs ("1", "2"). Metering halos and all other LEDs are never touched. The gradient (`LEDcolors[]` + DATA_NOTIFY(9)) and bulk (`directLEDValues` + DATA_NOTIFY(5)) approaches documented below were explored during development but are not used — DATA_NOTIFY(8) provides zero-side-effect updates without requiring mode changes. The button LED side effects described in the "Button LED Categories" section below only apply to full direct LED mode usage (e.g., animations), not to Focusmute's single-LED approach.
 
 ## LED Control API
 
@@ -149,7 +149,7 @@ After using direct LED mode, button LEDs (indices 27-39) fall into two categorie
 | 38 | Output 2 | outputMute (28) | `0x70808800` (white — confirmed firmware value) |
 | 39 | USB | (none — always on) | `0x00380000` (green — confirmed firmware value) |
 
-> **Color note**: The cache-dependent button colors above (`0x70808800` white, `0x00380000` green) are confirmed firmware values read directly from the device's `directLEDValues` descriptor — the firmware writes these exact values to the descriptor positions for cache-dependent buttons. Raw `0xFFFFFF00` appears "off-white" (too bright, pink-tinted) on the LED hardware. **Note**: With `mute_inputs=all` (default), Focusmute only changes the metering gradient (`LEDcolors[]` + DATA_NOTIFY(9)), which uses the native rendering path where standard color values display correctly. Per-input mute (`mute_inputs=1`, `2`, `1,2`) uses `directLEDValues` for halo LEDs only — these button colors are not involved.
+> **Color note**: The cache-dependent button colors above (`0x70808800` white, `0x00380000` green) are confirmed firmware values read directly from the device's `directLEDValues` descriptor — the firmware writes these exact values to the descriptor positions for cache-dependent buttons. Raw `0xFFFFFF00` appears "off-white" (too bright, pink-tinted) on the LED hardware. **Note**: Focusmute uses DATA_NOTIFY(8) single-LED updates targeting only the number indicator LEDs ("1", "2") — it never writes to `directLEDValues`, `LEDcolors[]`, or any button LED positions.
 
 ### DATA_NOTIFY(5) Scope in Mode 0
 

@@ -280,7 +280,7 @@ mod tests {
         assert_eq!(strategy.number_leds, &[0, 8]);
         assert_eq!(strategy.mute_colors, &[RED, RED]);
         assert_eq!(strategy.selected_color, 0x20FF_0000);
-        assert_eq!(strategy.unselected_color, 0x88FF_FF00);
+        assert_eq!(strategy.unselected_color, 0xAAFF_DD00);
     }
 
     #[test]

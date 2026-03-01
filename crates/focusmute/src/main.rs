@@ -38,11 +38,30 @@ fn has_parent_console() -> bool {
     }
 }
 
+/// Initialize the tray app logger, directing output to a log file.
+///
+/// Falls back to stderr if the log file can't be opened.
+fn init_tray_logger() {
+    use focusmute_lib::config::Config;
+
+    let mut builder =
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"));
+    builder.format_target(false);
+
+    if let Some(log_path) = Config::log_path() {
+        if let Some(dir) = log_path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        if let Ok(file) = std::fs::File::create(&log_path) {
+            builder.target(env_logger::Target::Pipe(Box::new(file)));
+        }
+    }
+
+    builder.init();
+}
+
 fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn"))
-        .format_timestamp(None)
-        .format_target(false)
-        .init();
+    init_tray_logger();
 
     #[cfg(not(any(windows, target_os = "linux")))]
     {

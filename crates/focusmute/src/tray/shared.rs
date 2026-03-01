@@ -54,7 +54,10 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
     // Open device and initialise shared state.
     // If the device isn't connected yet, start with a no-op strategy and
     // let the reconnect loop pick it up later.
-    let config = Config::load();
+    let (config, parse_warnings) = Config::load_with_warnings();
+    for w in &parse_warnings {
+        log::warn!("{w}");
+    }
     let (mut state, mut device) = match open_device_by_serial(&config.device_serial) {
         Ok(dev) => {
             let st = TrayState::init_with_config(config, &dev)?;
@@ -86,6 +89,23 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
     // If no device at startup, show disconnected status immediately
     if device.is_none() {
         tray_menu.set_device_connected(false);
+    }
+
+    // Show startup warnings (parse errors + validation errors)
+    {
+        const MAX_SOUND_BYTES: u64 = 10_000_000;
+        let mut all_warnings = parse_warnings;
+        let input_count = state.ctx.as_ref().and_then(|c| c.input_count());
+        if let Err(errs) = state.config.validate(input_count, MAX_SOUND_BYTES) {
+            for e in &errs {
+                let msg = e.to_string();
+                log::warn!("[config] {msg}");
+                all_warnings.push(msg);
+            }
+        }
+        if !all_warnings.is_empty() {
+            state::show_startup_warnings(&all_warnings);
+        }
     }
 
     // Channel for background → main thread communication

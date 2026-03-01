@@ -102,7 +102,7 @@ static SCARLETT_2I2: ModelProfile = ModelProfile {
     input_halos: &SCARLETT_2I2_INPUT_HALOS,
     output_halo_segments: 16..27,
     number_led_selected: 0x20FF_0000, // Green (firmware is 0x40FF, adjusted to match visually)
-    number_led_unselected: 0x88FF_FF00, // White (tuned to match firmware appearance)
+    number_led_unselected: 0xAAFF_DD00, // White (tuned to match firmware appearance)
     button_labels: &[
         "Select button LED 1",         // 27
         "Inst button",                 // 28

@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-02-28
+
+### Added
+
+- `--verbose` / `-v` global CLI flag for debug-level logging
+- Config `save_to()` / `load_from()` methods for arbitrary file paths
+- Config `load_with_warnings()` method returns parse errors as warnings instead of silently falling back to defaults
+- `Config::log_path()` for platform-specific log file location
+- Tray app logs to `focusmute.log` in the config directory (info level by default)
+- Startup config validation with desktop notification — shows parse errors and validation warnings (invalid colors, out-of-range inputs) as a notification on launch, regardless of `notifications_enabled` setting
+- `input_colors` validation in `Config::validate()` — catches invalid color values, out-of-range keys, and non-numeric keys
+- Hook command RAII guard (`HookGuard`) — ensures `HOOK_RUNNING` flag is reset even if the hook thread panics
+- CLI integration tests for all subcommands (devices, status, mute/unmute/descriptor/probe/monitor/map --help)
+- Hook command execution tests (mute and unmute dispatch with marker file verification)
+
+### Changed
+
+- Split `tray/state.rs` (1249 LOC) into submodules: `state/mod.rs`, `state/icon.rs`, `state/menu.rs`, `state/hotkey.rs`
+- `Config::save()` now delegates to `Config::save_to()` (DRY refactor)
+- `Config::load()` now delegates to `Config::load_with_warnings()` (DRY refactor)
+- `CONFIG_HEADER` constant hoisted to module level and shared between save methods
+
+### Fixed
+
+- Fixed stale "all (gradient mode)" display string in `MuteInputs::All` — now shows "all"
+- Fixed misleading "TeamSpeak-style" comment on embedded notification sounds
+
 ## [0.2.0] - 2026-02-28
 
 ### Added
@@ -15,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Consolidated tray menu — removed "Sound Feedback" and "Start with Windows/System" toggles (both accessible via Settings dialog) and standalone About dialog (device info moved into Settings)
 - Improved settings dialog styling — grouped sections with frames, consistent button styling, section header typography, device info section
-- Tuned unselected input LED white color (`0x88FFFF00`) to visually match firmware appearance on hardware
+- Tuned unselected input LED white color (`0x88FFFF00` → `0xAAFFDD00`) to visually match firmware appearance on hardware
 
 ### Fixed
 

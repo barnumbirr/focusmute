@@ -8,7 +8,7 @@ use std::io::Cursor;
 use rodio::buffer::SamplesBuffer;
 use rodio::{Decoder, Sink, Source};
 
-// Embedded TeamSpeak-style mute/unmute sounds
+// Embedded mute/unmute notification sounds (short beep tones).
 pub(crate) const SOUND_MUTED: &[u8] = include_bytes!("../assets/muted.wav");
 pub(crate) const SOUND_UNMUTED: &[u8] = include_bytes!("../assets/unmuted.wav");
 

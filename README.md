@@ -66,15 +66,19 @@ See [dist/linux/README-linux.md](dist/linux/README-linux.md) for full details an
 
 ### Tray App (Windows + Linux)
 
-Launch `focusmute` (or `focusmute.exe` on Windows). It sits in the system tray, monitors your mic, and updates LEDs automatically. Right-click for the menu (Status, Toggle Mute, Settings, Reconnect Device, Quit). The global hotkey (default: Ctrl+Shift+M) toggles mute. If no Scarlett device is connected at startup, the app starts in "Disconnected" mode and automatically connects when the device is plugged in.
+Launch `focusmute` (or `focusmute.exe` on Windows). It sits in the system tray, monitors your mic, and updates LEDs automatically. Right-click for the menu (Status, Toggle Mute, Settings, Reconnect Device, Quit). The global hotkey (default: Ctrl+Shift+M) toggles mute. If no Scarlett device is connected at startup, the app starts in "Disconnected" mode and automatically connects when the device is plugged in. The tray app logs to `focusmute.log` in the config directory (info level by default; override with `RUST_LOG` env var). On startup, any config parse errors or validation warnings are shown as a desktop notification.
 
 **Linux notes:** The tray app uses GTK 3. Global hotkeys work on X11; on Wayland they may not function (use the tray menu instead).
 
 ### CLI
 
 ```
-focusmute-cli <command>
+focusmute-cli [--verbose|-v] <command>
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--verbose`, `-v` | Enable debug-level logging to stderr |
 
 | Command | Description |
 |---------|-------------|
@@ -195,7 +199,11 @@ focusmute/
         ├── tray/                       System tray app
         │   ├── mod.rs                  Platform dispatcher + single-instance
         │   ├── shared.rs               Shared event loop (PlatformAdapter trait)
-        │   ├── state.rs                Tray state, menu, hotkey management
+        │   ├── state/                  Tray state management
+        │   │   ├── mod.rs              TrayState, TrayResources, message dispatch
+        │   │   ├── icon.rs             Icon loading + caching (CachedIcon)
+        │   │   ├── menu.rs             Menu, notifications, mute UI updates
+        │   │   └── hotkey.rs           Hotkey registration + re-registration
         │   ├── windows.rs              Windows adapter: Win32 message pump
         │   └── linux.rs                Linux adapter: GTK event loop
         └── sound.rs                    Pre-decoded audio playback

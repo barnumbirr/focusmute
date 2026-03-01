@@ -6,7 +6,7 @@
 - [x] **Prettier settings window** — Grouped sections with `egui::Frame`, consistent button styling, section header typography, device info section.
 - [x] **Graceful no-device startup** — App starts without a Scarlett device connected, shows "Disconnected" in tray menu, reconnects automatically when device appears. Hotkey, sound, and notifications work while disconnected; LED writes are no-ops until a device is found.
 - [x] **Windows code signing** — SignPath Foundation (free for open source). Workflow pre-wired in release.yml, guarded by `SIGNPATH_API_TOKEN` secret. Enable once approved.
-- [x] **LED white calibration** — Tuned `number_led_unselected` from `0xFFFFFF00` to `0x88FFFF00` to visually match firmware white on hardware.
+- [x] **LED white calibration** — Tuned `number_led_unselected` from `0xFFFFFF00` to `0xAAFFDD00` to visually match firmware white on hardware.
 
 ## Known Limitations
 
@@ -17,3 +17,5 @@
 - [ ] **Multi-device support** — Support multiple Scarlett devices simultaneously. Requires per-device strategies with shared mute state, per-device reconnect backoff, config changes (`device_serials: Vec<String>` or auto-discover), CLI `--device <serial>` flag, and refactoring the single-device assumptions throughout the monitor loop and TrayState.
 - [ ] **Big interface support (16i16+)** — Larger Focusrite interfaces (8i6, 18i8, 18i20, Clarett+) use the Focusrite Control Protocol (FCP) over a TCP socket instead of the `\pal` HID interface. Requires reverse-engineering the FCP socket protocol, a new `FcpDevice` implementation of the `ScarlettDevice` trait, and model profiles for each device. Likely Linux-first (fcp-server available).
 - [ ] **macOS support** — New `MacosAdapter` implementing `PlatformAdapter`, CoreAudio for mute monitoring, IOKit HID for device access, .dmg packaging, and code signing/notarization.
+- [ ] **Schema versioning / migration** — Validate firmware schema version against known-good versions. Detect and handle schema format changes across firmware updates to prevent silent breakage.
+- [ ] **Split device.rs Windows FFI into safe wrappers** — Extract SetupDi/DeviceIoControl FFI calls into a safe abstraction layer, reducing unsafe surface area and improving testability.

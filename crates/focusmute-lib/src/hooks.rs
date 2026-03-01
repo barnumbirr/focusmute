@@ -11,6 +11,16 @@ use crate::monitor::MonitorAction;
 /// Guard preventing concurrent hook execution (shared across mute/unmute hooks).
 static HOOK_RUNNING: AtomicBool = AtomicBool::new(false);
 
+/// RAII guard that resets `HOOK_RUNNING` on drop. Ensures the flag is cleared
+/// even if the hook thread panics.
+struct HookGuard;
+
+impl Drop for HookGuard {
+    fn drop(&mut self) {
+        HOOK_RUNNING.store(false, Ordering::SeqCst);
+    }
+}
+
 /// Default timeout for hook commands (30 seconds).
 const HOOK_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -45,8 +55,8 @@ fn run_hook(command: &str) {
     }
     let command = command.to_string();
     std::thread::spawn(move || {
+        let _guard = HookGuard;
         let result = run_hook_with_timeout(&command, HOOK_TIMEOUT);
-        HOOK_RUNNING.store(false, Ordering::SeqCst);
         match result {
             Ok(s) if !s.success() => {
                 log::warn!("hook command exited with {s}: {command}");
@@ -146,5 +156,88 @@ mod tests {
         run_hook("echo should-not-run");
         // Clean up
         HOOK_RUNNING.store(false, Ordering::SeqCst);
+    }
+
+    /// Wait for HOOK_RUNNING to become false (up to 5 seconds).
+    fn wait_for_hook_idle() {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while HOOK_RUNNING.load(Ordering::SeqCst) {
+            if std::time::Instant::now() > deadline {
+                panic!("timed out waiting for HOOK_RUNNING to become false");
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    /// Wait for a file to appear (up to 5 seconds).
+    fn wait_for_file(path: &std::path::Path) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !path.exists() {
+            if std::time::Instant::now() > deadline {
+                panic!("timed out waiting for file: {}", path.display());
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    #[test]
+    fn run_action_hook_dispatches_commands() {
+        wait_for_hook_idle();
+
+        let dir = tempfile::tempdir().unwrap();
+
+        // Test mute command dispatch
+        let mute_marker = dir.path().join("muted.txt");
+        let mute_cmd = format!("echo muted > {}", mute_marker.display());
+        let config = Config {
+            on_mute_command: mute_cmd,
+            ..Config::default()
+        };
+        run_action_hook(MonitorAction::ApplyMute, &config);
+        wait_for_file(&mute_marker);
+        wait_for_hook_idle();
+
+        let content = std::fs::read_to_string(&mute_marker).unwrap();
+        assert!(
+            content.trim() == "muted",
+            "mute marker should contain 'muted', got: {content:?}"
+        );
+
+        // Test unmute command dispatch (runs after mute hook completes)
+        let unmute_marker = dir.path().join("unmuted.txt");
+        let unmute_cmd = format!("echo unmuted > {}", unmute_marker.display());
+        let config = Config {
+            on_unmute_command: unmute_cmd,
+            ..Config::default()
+        };
+        run_action_hook(MonitorAction::ClearMute, &config);
+        wait_for_file(&unmute_marker);
+        wait_for_hook_idle();
+
+        let content = std::fs::read_to_string(&unmute_marker).unwrap();
+        assert!(
+            content.trim() == "unmuted",
+            "unmute marker should contain 'unmuted', got: {content:?}"
+        );
+    }
+
+    #[test]
+    fn hook_guard_resets_on_panic() {
+        wait_for_hook_idle();
+
+        // Spawn a thread that sets HOOK_RUNNING, creates a HookGuard, then panics.
+        // The Drop impl should reset the flag even after panic.
+        let handle = std::thread::spawn(|| {
+            HOOK_RUNNING.store(true, Ordering::SeqCst);
+            let _guard = HookGuard;
+            panic!("intentional panic to test HookGuard drop");
+        });
+        // Join the thread — it will have panicked
+        let _ = handle.join();
+        // The guard's Drop should have reset HOOK_RUNNING to false
+        assert!(
+            !HOOK_RUNNING.load(Ordering::SeqCst),
+            "HOOK_RUNNING should be false after HookGuard drop on panic"
+        );
     }
 }

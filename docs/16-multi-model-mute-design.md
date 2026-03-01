@@ -30,14 +30,14 @@ Physical Input 2 jack
 
 ### LED Indication
 
-The `mute_inputs` config controls which halos light up:
+The `mute_inputs` config controls which number indicator LEDs light up:
 
 | Config | Behavior | Mechanism |
 |--------|----------|-----------|
-| `all` | All halos (inputs + output) glow mute color | `LEDcolors[]` gradient + DATA_NOTIFY(9) |
-| `1` | Only Input 1 halo | `directLEDValues` per-input + DATA_NOTIFY(5) |
-| `2` | Only Input 2 halo | `directLEDValues` per-input + DATA_NOTIFY(5) |
-| `1,2` | Both input halos | `directLEDValues` per-input + DATA_NOTIFY(5) |
+| `all` | All input number LEDs glow mute color | `directLEDColour` + `directLEDIndex` + DATA_NOTIFY(8) per LED |
+| `1` | Only Input 1 number LED | `directLEDColour` + `directLEDIndex` + DATA_NOTIFY(8) |
+| `2` | Only Input 2 number LED | `directLEDColour` + `directLEDIndex` + DATA_NOTIFY(8) |
+| `1,2` | Both input number LEDs | `directLEDColour` + `directLEDIndex` + DATA_NOTIFY(8) per LED |
 
 ### Why This Works on the 2i2
 
