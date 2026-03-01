@@ -1,10 +1,12 @@
 //! `config` subcommand — show current configuration and file paths.
 
+use std::path::Path;
+
 use super::{Config, ConfigFilesJson, ConfigOutput, Result, kv, kv_indent, kv_width, led, schema};
 
-pub(super) fn cmd_config(json: bool) -> Result<()> {
-    let config = Config::load();
-    let config_path = Config::path();
+pub(super) fn cmd_config(json: bool, custom_path: Option<&Path>) -> Result<()> {
+    let config = super::load_config(custom_path);
+    let config_path = custom_path.map(|p| p.to_path_buf()).or_else(Config::path);
     let config_exists = config_path.as_ref().map(|p| p.exists()).unwrap_or(false);
 
     let schema_cache = schema::cache_path();

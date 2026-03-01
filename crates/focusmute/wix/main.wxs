@@ -9,7 +9,7 @@
 
     <Product
         Id='*'
-        Name='Focusmute'
+        Name='FocusMute'
         UpgradeCode='7EF4FD9F-060A-4CD0-B76D-5821DA45C11B'
         Manufacturer='Martin Simon'
         Language='1033'
@@ -18,7 +18,7 @@
 
         <Package Id='*'
             Keywords='Installer'
-            Description='Focusmute — Scarlett 4th Gen LED mute indicator'
+            Description='FocusMute — Scarlett 4th Gen LED mute indicator'
             Manufacturer='Martin Simon'
             InstallerVersion='450'
             Languages='1033'
@@ -31,7 +31,7 @@
             DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.' />
 
         <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1' />
-        <Property Id='DiskPrompt' Value='Focusmute Installation' />
+        <Property Id='DiskPrompt' Value='FocusMute Installation' />
 
         <Directory Id='TARGETDIR' Name='SourceDir'>
             <Directory Id='$(var.PlatformProgramFilesFolder)' Name='PFiles'>
@@ -74,7 +74,7 @@
                     <Component Id='StartMenuShortcut' Guid='*'>
                         <Shortcut
                             Id='FocusmuteShortcut'
-                            Name='Focusmute'
+                            Name='FocusMute'
                             Description='Scarlett 4th Gen LED mute indicator'
                             Target='[APPLICATIONFOLDER]focusmute.exe'
                             WorkingDirectory='APPLICATIONFOLDER'
@@ -92,7 +92,7 @@
             </Directory>
         </Directory>
 
-        <Feature Id='MainFeature' Title='Focusmute' Description='Install Focusmute tray app and CLI.'
+        <Feature Id='MainFeature' Title='FocusMute' Description='Install FocusMute tray app and CLI.'
             Level='1' ConfigurableDirectory='APPLICATIONFOLDER'
             AllowAdvertise='no' Display='expand' Absent='disallow'>
 

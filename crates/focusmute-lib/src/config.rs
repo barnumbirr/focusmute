@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 /// Header comment prepended to saved config files.
 const CONFIG_HEADER: &str =
-    "# Focusmute configuration — changes made outside the app may be overwritten.\n\n";
+    "# FocusMute configuration — changes made outside the app may be overwritten.\n\n";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -1046,7 +1046,7 @@ mute_inputs = "all"
     #[test]
     fn load_ignores_header_comment() {
         // Config with header comment (as produced by save()) should parse fine
-        let toml_str = r##"# Focusmute configuration — changes made outside the app may be overwritten.
+        let toml_str = r##"# FocusMute configuration — changes made outside the app may be overwritten.
 
 mute_color = "#00FF00"
 hotkey = "F12"
@@ -1118,7 +1118,7 @@ notifications_enabled = false
         Config::default().save_to(&path).unwrap();
         let contents = std::fs::read_to_string(&path).unwrap();
         assert!(
-            contents.starts_with("# Focusmute configuration"),
+            contents.starts_with("# FocusMute configuration"),
             "saved file should start with header comment"
         );
     }

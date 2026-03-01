@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Focusmute
+Name=FocusMute
 Comment=Hotkey mute control for Focusrite Scarlett 4th Gen interfaces
 Exec=focusmute
 Terminal=false

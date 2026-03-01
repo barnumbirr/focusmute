@@ -1,4 +1,4 @@
-# Focusmute — Linux Installation
+# FocusMute — Linux Installation
 
 Hotkey mute control for Focusrite Scarlett 4th Gen interfaces.
 Monitors your system's default capture device mute state and reflects it on your Scarlett interface LEDs.
@@ -68,9 +68,10 @@ Runs as a system tray icon. Right-click for the menu (Status, Toggle Mute, Setti
 ### CLI
 
 ```bash
-focusmute-cli monitor       # watch mute state, update LEDs in real time
-focusmute-cli status        # show device, microphone, and config status
-focusmute-cli --help        # see all commands
+focusmute-cli monitor                        # watch mute state, update LEDs in real time
+focusmute-cli status                         # show device, microphone, and config status
+focusmute-cli --config /path/to.toml config  # use a custom config file
+focusmute-cli --help                         # see all commands
 ```
 
 ## Uninstall

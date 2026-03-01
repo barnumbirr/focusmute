@@ -6,11 +6,11 @@ use eframe::egui;
 use focusmute_lib::config::Config;
 use focusmute_lib::led;
 
-use super::{MAX_SOUND_FILE_BYTES, combo_to_mute_inputs, inputs_combo_items};
+use super::{MAX_SOUND_FILE_BYTES, SoundPreviewPlayer, combo_to_mute_inputs, inputs_combo_items};
 
 /// Tracks which side of the color sync last changed.
 #[derive(PartialEq)]
-enum ColorDirty {
+pub(crate) enum ColorDirty {
     Neither,
     Text,
     Picker,
@@ -34,6 +34,12 @@ pub struct SettingsApp {
     mute_sound_path: String,
     unmute_sound_path: String,
 
+    on_mute_command: String,
+    on_unmute_command: String,
+
+    // ── Sound preview ──
+    preview_player: Option<SoundPreviewPlayer>,
+
     // ── Non-editable fields carried through ──
     original: Config,
 
@@ -48,7 +54,8 @@ pub struct SettingsApp {
 
     /// Resize the viewport on the next frame.
     needs_resize: bool,
-    /// Previous About section openness — resize while animating.
+    /// Previous collapsible section openness — resize while animating.
+    prev_advanced_openness: f32,
     prev_about_openness: f32,
 }
 
@@ -89,6 +96,11 @@ impl SettingsApp {
             mute_sound_path: config.mute_sound_path.clone(),
             unmute_sound_path: config.unmute_sound_path.clone(),
 
+            on_mute_command: config.on_mute_command.clone(),
+            on_unmute_command: config.on_unmute_command.clone(),
+
+            preview_player: None,
+
             original: config,
 
             device_lines,
@@ -98,49 +110,35 @@ impl SettingsApp {
             result,
 
             needs_resize: true,
+            prev_advanced_openness: -1.0,
             prev_about_openness: -1.0,
         }
     }
 
     /// Try to save: validate, send result, and close on success.
     fn try_save(&mut self, ctx: &egui::Context) {
-        let mute_inputs = combo_to_mute_inputs(self.mute_inputs_index, self.input_count);
-
-        // Sync color from picker if that was the last change
-        let color_str = if self.color_dirty == ColorDirty::Picker {
-            rgb_to_hex(self.color_rgb)
-        } else {
-            self.color_text.clone()
-        };
-
-        let candidate = Config {
-            mute_color: color_str,
-            hotkey: self.hotkey.clone(),
+        match build_and_validate_config(&ValidateParams {
+            color_dirty: &self.color_dirty,
+            color_text: &self.color_text,
+            color_rgb: self.color_rgb,
+            hotkey: &self.hotkey,
             sound_enabled: self.sound_enabled,
             autostart: self.autostart,
-            mute_inputs,
-            mute_sound_path: self.mute_sound_path.clone(),
-            unmute_sound_path: self.unmute_sound_path.clone(),
-            device_serial: self.original.device_serial.clone(),
-            on_mute_command: self.original.on_mute_command.clone(),
-            on_unmute_command: self.original.on_unmute_command.clone(),
-            input_colors: self.original.input_colors.clone(),
-            notifications_enabled: self.original.notifications_enabled,
-        };
-
-        let input_count = if self.input_count > 0 {
-            Some(self.input_count)
-        } else {
-            None
-        };
-
-        match candidate.validate(input_count, MAX_SOUND_FILE_BYTES) {
-            Ok(()) => {
-                *self.result.lock().unwrap() = Some(candidate);
+            mute_inputs_index: self.mute_inputs_index,
+            input_count: self.input_count,
+            mute_sound_path: &self.mute_sound_path,
+            unmute_sound_path: &self.unmute_sound_path,
+            on_mute_command: &self.on_mute_command,
+            on_unmute_command: &self.on_unmute_command,
+            original: &self.original,
+            max_sound_bytes: MAX_SOUND_FILE_BYTES,
+        }) {
+            Ok(config) => {
+                *self.result.lock().unwrap() = Some(config);
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
             Err(errs) => {
-                self.errors = errs.iter().map(|e| e.to_string()).collect();
+                self.errors = errs;
             }
         }
     }
@@ -156,6 +154,7 @@ impl eframe::App for SettingsApp {
         const BUTTON_AREA_HEIGHT: f32 = 54.0;
 
         let mut content_bottom = 0.0_f32;
+        let mut advanced_openness = 0.0_f32;
         let mut about_openness = 0.0_f32;
         egui::CentralPanel::default().show(ctx, |ui| {
             // ── Mute Indicator section ──
@@ -165,29 +164,6 @@ impl eframe::App for SettingsApp {
                     .min_col_width(80.0)
                     .spacing([12.0, 8.0])
                     .show(ui, |ui| {
-                        // Color row
-                        ui.label("Mute Color");
-                        ui.horizontal(|ui| {
-                            let text_response = ui.add(
-                                egui::TextEdit::singleline(&mut self.color_text)
-                                    .desired_width(140.0),
-                            );
-                            if text_response.changed() {
-                                self.color_dirty = ColorDirty::Text;
-                                if let Some(rgb) = hex_to_rgb(&self.color_text) {
-                                    self.color_rgb = rgb;
-                                }
-                            }
-
-                            let before = self.color_rgb;
-                            ui.color_edit_button_rgb(&mut self.color_rgb);
-                            if self.color_rgb != before {
-                                self.color_dirty = ColorDirty::Picker;
-                                self.color_text = rgb_to_hex(self.color_rgb);
-                            }
-                        });
-                        ui.end_row();
-
                         // Mute Inputs row
                         ui.label("Mute Inputs");
                         let selected_text = self
@@ -202,6 +178,29 @@ impl eframe::App for SettingsApp {
                                     ui.selectable_value(&mut self.mute_inputs_index, i, item);
                                 }
                             });
+                        ui.end_row();
+
+                        // Color row
+                        ui.label("Mute Color");
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let before = self.color_rgb;
+                            ui.color_edit_button_rgb(&mut self.color_rgb);
+                            if self.color_rgb != before {
+                                self.color_dirty = ColorDirty::Picker;
+                                self.color_text = rgb_to_hex(self.color_rgb);
+                            }
+
+                            let text_response = ui.add(
+                                egui::TextEdit::singleline(&mut self.color_text)
+                                    .desired_width(ui.available_width()),
+                            );
+                            if text_response.changed() {
+                                self.color_dirty = ColorDirty::Text;
+                                if let Some(rgb) = hex_to_rgb(&self.color_text) {
+                                    self.color_rgb = rgb;
+                                }
+                            }
+                        });
                         ui.end_row();
                     });
             });
@@ -227,41 +226,61 @@ impl eframe::App for SettingsApp {
                 ui.checkbox(&mut self.sound_enabled, "Sound Feedback");
                 ui.add_space(4.0);
 
-                // Compute responsive text field width: available frame width
-                // minus label column (80), grid spacing (12), Browse button (~72),
-                // and horizontal spacing (4).
-                let text_width = (ui.available_width() - 80.0 - 12.0 - 76.0).max(100.0);
-
                 egui::Grid::new("sound_grid")
                     .num_columns(2)
                     .min_col_width(80.0)
                     .spacing([12.0, 8.0])
                     .show(ui, |ui| {
                         ui.label("Mute Sound");
-                        ui.horizontal(|ui| {
-                            ui.add(
-                                egui::TextEdit::singleline(&mut self.mute_sound_path)
-                                    .desired_width(text_width),
-                            );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.button("Play").clicked() {
+                                if self.preview_player.is_none() {
+                                    self.preview_player = SoundPreviewPlayer::try_new();
+                                }
+                                if let Some(ref player) = self.preview_player {
+                                    player.play(&self.mute_sound_path, crate::sound::SOUND_MUTED);
+                                }
+                            }
+                            if !self.mute_sound_path.is_empty() && ui.button("Clear").clicked() {
+                                self.mute_sound_path.clear();
+                            }
                             if ui.button("Browse...").clicked()
                                 && let Some(path) = browse_wav_file()
                             {
                                 self.mute_sound_path = path;
                             }
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.mute_sound_path)
+                                    .desired_width(ui.available_width())
+                                    .hint_text("(built-in)"),
+                            );
                         });
                         ui.end_row();
 
                         ui.label("Unmute Sound");
-                        ui.horizontal(|ui| {
-                            ui.add(
-                                egui::TextEdit::singleline(&mut self.unmute_sound_path)
-                                    .desired_width(text_width),
-                            );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.button("Play").clicked() {
+                                if self.preview_player.is_none() {
+                                    self.preview_player = SoundPreviewPlayer::try_new();
+                                }
+                                if let Some(ref player) = self.preview_player {
+                                    player
+                                        .play(&self.unmute_sound_path, crate::sound::SOUND_UNMUTED);
+                                }
+                            }
+                            if !self.unmute_sound_path.is_empty() && ui.button("Clear").clicked() {
+                                self.unmute_sound_path.clear();
+                            }
                             if ui.button("Browse...").clicked()
                                 && let Some(path) = browse_wav_file()
                             {
                                 self.unmute_sound_path = path;
                             }
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.unmute_sound_path)
+                                    .desired_width(ui.available_width())
+                                    .hint_text("(built-in)"),
+                            );
                         });
                         ui.end_row();
                     });
@@ -275,6 +294,34 @@ impl eframe::App for SettingsApp {
                 ui.checkbox(&mut self.autostart, "Start with System");
             });
 
+            // ── Advanced section (collapsible, collapsed by default) ──
+            ui.add_space(6.0);
+            let advanced_header =
+                egui::CollapsingHeader::new(egui::RichText::new("Advanced").strong().size(14.0))
+                    .default_open(false)
+                    .show_unindented(ui, |ui| {
+                        egui::Frame::group(ui.style())
+                            .inner_margin(egui::Margin::same(10))
+                            .show(ui, |ui| {
+                                ui.set_width(ui.available_width());
+                                let text_width = ui.available_width() - 4.0;
+                                ui.label("On Mute Command");
+                                ui.add(
+                                    egui::TextEdit::singleline(&mut self.on_mute_command)
+                                        .desired_width(text_width)
+                                        .hint_text("(none)"),
+                                );
+                                ui.add_space(4.0);
+                                ui.label("On Unmute Command");
+                                ui.add(
+                                    egui::TextEdit::singleline(&mut self.on_unmute_command)
+                                        .desired_width(text_width)
+                                        .hint_text("(none)"),
+                                );
+                            });
+                    });
+            advanced_openness = advanced_header.openness;
+
             // ── About section (collapsible, collapsed by default) ──
             ui.add_space(6.0);
             let about_header =
@@ -287,7 +334,7 @@ impl eframe::App for SettingsApp {
                                 ui.set_width(ui.available_width());
                                 let version = env!("CARGO_PKG_VERSION");
                                 ui.label(
-                                    egui::RichText::new(format!("Focusmute v{version}"))
+                                    egui::RichText::new(format!("FocusMute v{version}"))
                                         .strong()
                                         .size(15.0),
                                 );
@@ -359,20 +406,95 @@ impl eframe::App for SettingsApp {
             });
         });
 
-        // Resize on the first frame and while the About section animates.
+        // Resize on the first frame and while any collapsible section animates.
         // content_bottom is measured before the right-to-left button layout,
         // so it reflects actual content height and doesn't depend on window
         // size — no feedback loop.
-        let openness_animating = (about_openness - self.prev_about_openness).abs() > 0.001;
+        let advanced_animating = (advanced_openness - self.prev_advanced_openness).abs() > 0.001;
+        let about_animating = (about_openness - self.prev_about_openness).abs() > 0.001;
+        self.prev_advanced_openness = advanced_openness;
         self.prev_about_openness = about_openness;
 
-        if self.needs_resize || openness_animating {
+        if self.needs_resize || advanced_animating || about_animating {
             self.needs_resize = false;
             ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
                 440.0,
                 (content_bottom + BUTTON_AREA_HEIGHT).round(),
             )));
         }
+    }
+}
+
+/// Parameters for [`build_and_validate_config`], grouping dialog form fields.
+pub(crate) struct ValidateParams<'a> {
+    pub color_dirty: &'a ColorDirty,
+    pub color_text: &'a str,
+    pub color_rgb: [f32; 3],
+    pub hotkey: &'a str,
+    pub sound_enabled: bool,
+    pub autostart: bool,
+    pub mute_inputs_index: usize,
+    pub input_count: usize,
+    pub mute_sound_path: &'a str,
+    pub unmute_sound_path: &'a str,
+    pub on_mute_command: &'a str,
+    pub on_unmute_command: &'a str,
+    pub original: &'a Config,
+    pub max_sound_bytes: u64,
+}
+
+/// Build a `Config` from dialog form fields, validate, and return it or a list of error strings.
+///
+/// This is a pure function (no UI side effects) to enable unit testing.
+pub(crate) fn build_and_validate_config(p: &ValidateParams<'_>) -> Result<Config, Vec<String>> {
+    let mute_inputs = combo_to_mute_inputs(p.mute_inputs_index, p.input_count);
+
+    // Sync color from picker if that was the last change
+    let color_str = if *p.color_dirty == ColorDirty::Picker {
+        rgb_to_hex(p.color_rgb)
+    } else {
+        p.color_text.to_string()
+    };
+
+    let candidate = Config {
+        mute_color: color_str,
+        hotkey: p.hotkey.to_string(),
+        sound_enabled: p.sound_enabled,
+        autostart: p.autostart,
+        mute_inputs,
+        mute_sound_path: p.mute_sound_path.to_string(),
+        unmute_sound_path: p.unmute_sound_path.to_string(),
+        device_serial: p.original.device_serial.clone(),
+        on_mute_command: p.on_mute_command.to_string(),
+        on_unmute_command: p.on_unmute_command.to_string(),
+        input_colors: p.original.input_colors.clone(),
+        notifications_enabled: p.original.notifications_enabled,
+    };
+
+    let input_count_opt = if p.input_count > 0 {
+        Some(p.input_count)
+    } else {
+        None
+    };
+
+    let mut errors = Vec::new();
+
+    if let Err(errs) = candidate.validate(input_count_opt, p.max_sound_bytes) {
+        for e in &errs {
+            errors.push(e.to_string());
+        }
+    }
+
+    // Validate hotkey syntax (global-hotkey crate parsing)
+    let hotkey_str = p.hotkey.trim();
+    if !hotkey_str.is_empty() && hotkey_str.parse::<global_hotkey::hotkey::HotKey>().is_err() {
+        errors.push(format!("Invalid hotkey syntax: \"{hotkey_str}\""));
+    }
+
+    if errors.is_empty() {
+        Ok(candidate)
+    } else {
+        Err(errors)
     }
 }
 
@@ -421,6 +543,194 @@ fn browse_wav_file() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
+
+    /// Helper: build a valid config with defaults, returning Ok.
+    fn valid_build() -> Result<Config, Vec<String>> {
+        build_and_validate_config(&ValidateParams {
+            color_dirty: &ColorDirty::Neither,
+            color_text: "#FF0000",
+            color_rgb: [1.0, 0.0, 0.0],
+            hotkey: "Ctrl+Shift+M",
+            sound_enabled: true,
+            autostart: false,
+            mute_inputs_index: 0,
+            input_count: 2,
+            mute_sound_path: "",
+            unmute_sound_path: "",
+            on_mute_command: "",
+            on_unmute_command: "",
+            original: &Config::default(),
+            max_sound_bytes: 10_000_000,
+        })
+    }
+
+    #[test]
+    fn build_valid_inputs_returns_ok() {
+        let config = valid_build().expect("should be Ok");
+        assert_eq!(config.mute_color, "#FF0000");
+        assert_eq!(config.hotkey, "Ctrl+Shift+M");
+        assert!(config.sound_enabled);
+        assert!(!config.autostart);
+        assert_eq!(config.mute_inputs, "all");
+    }
+
+    #[test]
+    fn build_invalid_color_returns_err() {
+        let result = build_and_validate_config(&ValidateParams {
+            color_dirty: &ColorDirty::Text,
+            color_text: "not-a-color",
+            color_rgb: [0.0, 0.0, 0.0],
+            hotkey: "Ctrl+Shift+M",
+            sound_enabled: true,
+            autostart: false,
+            mute_inputs_index: 0,
+            input_count: 2,
+            mute_sound_path: "",
+            unmute_sound_path: "",
+            on_mute_command: "",
+            on_unmute_command: "",
+            original: &Config::default(),
+            max_sound_bytes: 10_000_000,
+        });
+        assert!(result.is_err());
+        let errs = result.unwrap_err();
+        assert!(
+            errs.iter().any(|e| e.to_lowercase().contains("color")),
+            "expected color error, got: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn build_empty_hotkey_returns_err() {
+        let result = build_and_validate_config(&ValidateParams {
+            color_dirty: &ColorDirty::Neither,
+            color_text: "#FF0000",
+            color_rgb: [1.0, 0.0, 0.0],
+            hotkey: "",
+            sound_enabled: true,
+            autostart: false,
+            mute_inputs_index: 0,
+            input_count: 2,
+            mute_sound_path: "",
+            unmute_sound_path: "",
+            on_mute_command: "",
+            on_unmute_command: "",
+            original: &Config::default(),
+            max_sound_bytes: 10_000_000,
+        });
+        // Empty hotkey triggers the Config::validate error (hotkey required)
+        assert!(result.is_err());
+        let errs = result.unwrap_err();
+        assert!(
+            errs.iter().any(|e| e.to_lowercase().contains("hotkey")),
+            "expected hotkey error, got: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn build_invalid_hotkey_syntax_returns_err() {
+        let result = build_and_validate_config(&ValidateParams {
+            color_dirty: &ColorDirty::Neither,
+            color_text: "#FF0000",
+            color_rgb: [1.0, 0.0, 0.0],
+            hotkey: "Ctrl+Blah",
+            sound_enabled: true,
+            autostart: false,
+            mute_inputs_index: 0,
+            input_count: 2,
+            mute_sound_path: "",
+            unmute_sound_path: "",
+            on_mute_command: "",
+            on_unmute_command: "",
+            original: &Config::default(),
+            max_sound_bytes: 10_000_000,
+        });
+        assert!(result.is_err());
+        let errs = result.unwrap_err();
+        assert!(
+            errs.iter().any(|e| e.contains("Invalid hotkey syntax")),
+            "expected hotkey syntax error, got: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn build_picker_dirty_uses_rgb_conversion() {
+        let config = build_and_validate_config(&ValidateParams {
+            color_dirty: &ColorDirty::Picker,
+            color_text: "garbage-text",
+            color_rgb: [0.0, 1.0, 0.0],
+            hotkey: "Ctrl+Shift+M",
+            sound_enabled: true,
+            autostart: false,
+            mute_inputs_index: 0,
+            input_count: 2,
+            mute_sound_path: "",
+            unmute_sound_path: "",
+            on_mute_command: "",
+            on_unmute_command: "",
+            original: &Config::default(),
+            max_sound_bytes: 10_000_000,
+        })
+        .expect("picker dirty should use RGB, not text");
+        assert_eq!(config.mute_color, "#00FF00");
+    }
+
+    #[test]
+    fn build_preserves_original_fields() {
+        let original = Config {
+            device_serial: "ABC123".to_string(),
+            input_colors: HashMap::from([("1".into(), "#00FF00".into())]),
+            notifications_enabled: true,
+            ..Config::default()
+        };
+
+        let config = build_and_validate_config(&ValidateParams {
+            color_dirty: &ColorDirty::Neither,
+            color_text: "#FF0000",
+            color_rgb: [1.0, 0.0, 0.0],
+            hotkey: "Ctrl+Shift+M",
+            sound_enabled: true,
+            autostart: false,
+            mute_inputs_index: 0,
+            input_count: 2,
+            mute_sound_path: "",
+            unmute_sound_path: "",
+            on_mute_command: "",
+            on_unmute_command: "",
+            original: &original,
+            max_sound_bytes: 10_000_000,
+        })
+        .expect("should be Ok");
+
+        assert_eq!(config.device_serial, "ABC123");
+        assert_eq!(config.input_colors.get("1").unwrap(), "#00FF00");
+        assert!(config.notifications_enabled);
+    }
+
+    #[test]
+    fn build_hooks_are_preserved() {
+        let config = build_and_validate_config(&ValidateParams {
+            color_dirty: &ColorDirty::Neither,
+            color_text: "#FF0000",
+            color_rgb: [1.0, 0.0, 0.0],
+            hotkey: "Ctrl+Shift+M",
+            sound_enabled: true,
+            autostart: false,
+            mute_inputs_index: 0,
+            input_count: 2,
+            mute_sound_path: "",
+            unmute_sound_path: "",
+            on_mute_command: "echo muted",
+            on_unmute_command: "echo unmuted",
+            original: &Config::default(),
+            max_sound_bytes: 10_000_000,
+        })
+        .expect("should be Ok");
+
+        assert_eq!(config.on_mute_command, "echo muted");
+        assert_eq!(config.on_unmute_command, "echo unmuted");
+    }
 
     #[test]
     fn hex_to_rgb_valid_hex() {

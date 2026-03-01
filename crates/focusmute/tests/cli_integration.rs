@@ -128,3 +128,24 @@ fn cli_map_help_succeeds() {
         .success()
         .stdout(predicate::str::contains("map"));
 }
+
+// ── --config flag ──
+
+#[test]
+fn cli_config_with_custom_path() {
+    // A nonexistent custom config path should load defaults (not error)
+    cli()
+        .args(["--config", "/tmp/focusmute-test-nonexistent.toml", "config"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_monitor_help_with_config() {
+    // --config should be accepted alongside subcommand --help
+    cli()
+        .args(["--config", "/tmp/focusmute-test.toml", "monitor", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("monitor"));
+}

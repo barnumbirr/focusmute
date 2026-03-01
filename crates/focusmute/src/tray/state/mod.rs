@@ -70,7 +70,7 @@ pub fn get_auto_launch() -> Option<auto_launch::AutoLaunch> {
     let exe = std::env::current_exe().ok()?;
     let path = exe.to_str()?;
     AutoLaunchBuilder::new()
-        .set_app_name("Focusmute")
+        .set_app_name("FocusMute")
         .set_app_path(path)
         .build()
         .ok()

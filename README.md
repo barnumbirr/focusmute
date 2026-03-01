@@ -1,8 +1,8 @@
-# Focusmute
+# FocusMute
 
 Hotkey mute control for Focusrite Scarlett 4th Gen interfaces.
 
-Focusmute monitors your system microphone's mute state and reflects it on your Focusrite Scarlett interface LEDs in real time. When you mute, the input number indicator LEDs ("1", "2") turn your chosen color (default: red). When you unmute, they are restored to their firmware colors (green for the selected input, white for unselected). Metering halos and all other LEDs are never touched. It runs as a system tray app on Windows and Linux with hotkey support, or as a CLI on both platforms.
+FocusMute monitors your system microphone's mute state and reflects it on your Focusrite Scarlett interface LEDs in real time. When you mute, the input number indicator LEDs ("1", "2") turn your chosen color (default: red). When you unmute, they are restored to their firmware colors (green for the selected input, white for unselected). Metering halos and all other LEDs are never touched. It runs as a system tray app on Windows and Linux with hotkey support, or as a CLI on both platforms.
 
 ## Features
 
@@ -26,7 +26,7 @@ Focusmute monitors your system microphone's mute state and reflects it on your F
 | Scarlett Solo / 4i4 4th Gen | Auto-discovery via firmware schema extraction |
 | Scarlett 16i16 / 18i16 / 18i20 4th Gen | Untested — likely works on Windows; requires unimplemented FCP Socket protocol on Linux |
 
-The small 4th Gen models (Solo, 2i2, 4i4) use the TRANSACT/hwdep protocol which Focusmute fully implements. The big models (16i16, 18i16, 18i20) use a different communication path on Linux (FCP Socket via a daemon process). On Windows they likely work through the same SwRoot driver, but this is unverified without hardware.
+The small 4th Gen models (Solo, 2i2, 4i4) use the TRANSACT/hwdep protocol which FocusMute fully implements. The big models (16i16, 18i16, 18i20) use a different communication path on Linux (FCP Socket via a daemon process). On Windows they likely work through the same SwRoot driver, but this is unverified without hardware.
 
 The `probe` command can detect any Scarlett 4th Gen device and extract its LED layout from firmware. Use `map` to interactively verify the predicted layout.
 
@@ -66,19 +66,20 @@ See [dist/linux/README-linux.md](dist/linux/README-linux.md) for full details an
 
 ### Tray App (Windows + Linux)
 
-Launch `focusmute` (or `focusmute.exe` on Windows). It sits in the system tray, monitors your mic, and updates LEDs automatically. Right-click for the menu (Status, Toggle Mute, Settings, Reconnect Device, Quit). The global hotkey (default: Ctrl+Shift+M) toggles mute. If no Scarlett device is connected at startup, the app starts in "Disconnected" mode and automatically connects when the device is plugged in. The tray app logs to `focusmute.log` in the config directory (info level by default; override with `RUST_LOG` env var). On startup, any config parse errors or validation warnings are shown as a desktop notification.
+Launch `focusmute` (or `focusmute.exe` on Windows). It sits in the system tray, monitors your mic, and updates LEDs automatically. Right-click for the menu (Status, Toggle Mute, Settings, Reconnect Device, Quit). The global hotkey (default: Ctrl+Shift+M) toggles mute. If no Scarlett device is connected at startup, the app starts in "Disconnected" mode and automatically connects when the device is plugged in. On exit, inputs are automatically unmuted and LEDs restored to their normal state. The tray app logs to `focusmute.log` in the config directory (info level by default; override with `RUST_LOG` env var). On startup, any config parse errors or validation warnings are shown as a desktop notification.
 
 **Linux notes:** The tray app uses GTK 3. Global hotkeys work on X11; on Wayland they may not function (use the tray menu instead).
 
 ### CLI
 
 ```
-focusmute-cli [--verbose|-v] <command>
+focusmute-cli [--verbose|-v] [--config <path>] <command>
 ```
 
 | Flag | Description |
 |------|-------------|
 | `--verbose`, `-v` | Enable debug-level logging to stderr |
+| `--config <path>` | Load settings from a custom TOML file instead of the default location |
 
 | Command | Description |
 |---------|-------------|
@@ -194,8 +195,8 @@ focusmute/
         │   └── status.rs              status subcommand
         ├── icon.rs                     Embedded PNG icon + app icon helper
         ├── settings_dialog/            Settings dialog (egui / eframe)
-        │   ├── mod.rs                  Shared helpers + dispatcher
-        │   └── ui.rs                   Cross-platform egui UI
+        │   ├── mod.rs                  Shared helpers, dispatcher, SoundPreviewPlayer
+        │   └── ui.rs                   Cross-platform egui UI + build_and_validate_config
         ├── tray/                       System tray app
         │   ├── mod.rs                  Platform dispatcher + single-instance
         │   ├── shared.rs               Shared event loop (PlatformAdapter trait)
@@ -256,7 +257,7 @@ Audio Backend ---poll---> MuteIndicator ---action---> LED ops ---USB---> Device
 2. `MuteIndicator` debounces the signal (2-sample threshold) and emits `ApplyMute`, `ClearMute`, or `NoChange`.
 3. LED ops translate the action into USB descriptor writes and DATA_NOTIFY(8) commands targeting number indicator LEDs.
 4. On communication failure, `ReconnectState` manages exponential backoff until the device reappears.
-5. On exit, number LEDs are restored to firmware colors by reading `selectedInput` (green for selected, white for unselected).
+5. On exit, inputs are unmuted (so the user isn't left silently muted) and number LEDs are restored to firmware colors by reading `selectedInput` (green for selected, white for unselected).
 
 ### Key Design Decisions
 

@@ -1,5 +1,6 @@
 //! `monitor` subcommand — run mute indicator (monitors mic mute, changes LED color).
 
+use std::path::Path;
 use std::sync::atomic::Ordering;
 
 use super::{
@@ -141,15 +142,15 @@ fn monitor_teardown(mctx: &MonitorCtx) {
     println!("Done.");
 }
 
-pub(super) fn cmd_monitor() -> Result<()> {
-    let mut config = Config::load();
+pub(super) fn cmd_monitor(config_path: Option<&Path>) -> Result<()> {
+    let mut config = super::load_config(config_path);
     let mute_color = led::mute_color_or_default(&config);
 
     // Banner
     #[cfg(windows)]
-    println!("Monitors mic mute state via Windows audio API.");
+    println!("FocusMute — Monitors mic mute state via Windows audio API.");
     #[cfg(target_os = "linux")]
-    println!("Monitors mic mute state via PulseAudio.");
+    println!("FocusMute — Monitors mic mute state via PulseAudio.");
     println!(
         "  Muted:   number LEDs -> {}",
         led::format_color(mute_color)
@@ -186,6 +187,15 @@ pub(super) fn cmd_monitor() -> Result<()> {
 
     // Main loop
     monitor_loop(&mut mctx, &monitor);
+
+    // Unmute all inputs so the user isn't left silently muted after exit
+    // (LEDs return to normal state and can no longer indicate mute).
+    if monitor.is_muted() {
+        match monitor.set_muted(false) {
+            Ok(()) => println!("  Unmuted inputs on exit."),
+            Err(e) => log::warn!("failed to unmute on exit: {e}"),
+        }
+    }
 
     // Cleanup
     monitor_teardown(&mctx);

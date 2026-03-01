@@ -14,10 +14,10 @@ mod windows;
 pub(super) const AUMID: &str = "Barnumbirr.Focusmute";
 
 /// Register the AUMID in the Windows registry so toast notifications display
-/// "Focusmute" with the app icon instead of "Windows PowerShell".
+/// "FocusMute" with the app icon instead of "Windows PowerShell".
 ///
 /// Writes to `HKCU\SOFTWARE\Classes\AppUserModelId\<AUMID>` with:
-/// - `DisplayName` = "Focusmute"
+/// - `DisplayName` = "FocusMute"
 /// - `IconUri` = path to icon PNG extracted to `%APPDATA%\Focusmute\`
 ///
 /// Failures are silently ignored — worst case, notifications fall back to the
@@ -45,7 +45,7 @@ fn register_aumid() {
     else {
         return;
     };
-    let _ = key.set_value("DisplayName", &"Focusmute");
+    let _ = key.set_value("DisplayName", &"FocusMute");
     let _ = key.set_value("IconUri", &icon_path.to_string_lossy().to_string());
 }
 
@@ -58,12 +58,12 @@ pub fn run() -> focusmute_lib::error::Result<()> {
     })?;
 
     if !instance.is_single() {
-        log::warn!("Another instance of Focusmute is already running.");
+        log::warn!("Another instance of FocusMute is already running.");
         let mut n = notify_rust::Notification::new();
         #[cfg(windows)]
         n.app_id(AUMID);
         #[cfg(target_os = "linux")]
-        n.summary("Focusmute");
+        n.summary("FocusMute");
         n.body("Another instance is already running.");
         let _ = n.show();
         return Ok(());

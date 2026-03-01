@@ -1,5 +1,7 @@
 //! `status` subcommand — show device and microphone status.
 
+use std::path::Path;
+
 use super::{
     Config, ConfigSummaryJson, DeviceContext, DeviceStatusJson, MicrophoneStatusJson, MuteMonitor,
     Result, ScarlettDevice, StatusOutput, audio, kv, kv_indent, kv_width, led, open_device, schema,
@@ -159,10 +161,10 @@ fn print_status(
     Ok(())
 }
 
-pub(super) fn cmd_status(json: bool) -> Result<()> {
+pub(super) fn cmd_status(json: bool, config_path: Option<&Path>) -> Result<()> {
     let device_status = open_device().ok().map(|dev| collect_device_status(&dev));
     let mic_status = get_mic_status();
-    let config = Config::load();
+    let config = super::load_config(config_path);
     print_status(device_status, mic_status, &config, json)
 }
 

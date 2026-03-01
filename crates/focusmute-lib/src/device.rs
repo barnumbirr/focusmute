@@ -547,58 +547,57 @@ mod windows_impl {
         /// Find the \pal device path and USB serial number.
         fn find_device() -> Option<(String, Option<String>)> {
             super::win_enum::enumerate_pal_paths(|path| {
-                let serial = Self::find_usb_serial();
+                let serial = find_usb_serial();
                 Some((path, serial))
             })
         }
+    }
 
-        /// Find the Focusrite USB device serial by enumerating USB devices.
-        fn find_usb_serial() -> Option<String> {
-            // Search for USB devices with VID_1235 (Focusrite) in their instance ID
-            let usb_enumerator: Vec<u16> = "USB".encode_utf16().chain(std::iter::once(0)).collect();
-            unsafe {
-                let dev_info = SetupDiGetClassDevsW(
-                    None,
-                    PCWSTR(usb_enumerator.as_ptr()),
-                    None,
-                    DIGCF_ALLCLASSES | DIGCF_PRESENT,
-                )
-                .ok()?;
-                for index in 0..256 {
-                    let mut dev_data = SP_DEVINFO_DATA {
-                        cbSize: mem::size_of::<SP_DEVINFO_DATA>() as u32,
-                        ..Default::default()
-                    };
-                    if SetupDiEnumDeviceInfo(dev_info, index, &mut dev_data).is_err() {
-                        break;
-                    }
-                    let mut instance_id = vec![0u16; 512];
-                    if SetupDiGetDeviceInstanceIdW(
-                        dev_info,
-                        &dev_data,
-                        Some(&mut instance_id),
-                        None,
-                    )
+    /// Find the Focusrite USB device serial by enumerating USB devices.
+    ///
+    /// Searches SetupDi for `VID_1235` (Focusrite) and extracts the serial from
+    /// the instance ID.  Returns the first match — sufficient for single-device
+    /// setups; multi-device would need PAL↔USB path correlation.
+    pub(super) fn find_usb_serial() -> Option<String> {
+        // Search for USB devices with VID_1235 (Focusrite) in their instance ID
+        let usb_enumerator: Vec<u16> = "USB".encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe {
+            let dev_info = SetupDiGetClassDevsW(
+                None,
+                PCWSTR(usb_enumerator.as_ptr()),
+                None,
+                DIGCF_ALLCLASSES | DIGCF_PRESENT,
+            )
+            .ok()?;
+            for index in 0..256 {
+                let mut dev_data = SP_DEVINFO_DATA {
+                    cbSize: mem::size_of::<SP_DEVINFO_DATA>() as u32,
+                    ..Default::default()
+                };
+                if SetupDiEnumDeviceInfo(dev_info, index, &mut dev_data).is_err() {
+                    break;
+                }
+                let mut instance_id = vec![0u16; 512];
+                if SetupDiGetDeviceInstanceIdW(dev_info, &dev_data, Some(&mut instance_id), None)
                     .is_ok()
-                    {
-                        let id = String::from_utf16_lossy(&instance_id);
-                        let id = id.trim_end_matches('\0');
-                        let id_upper = id.to_uppercase();
-                        // Match Focusrite USB devices: USB\VID_1235&PID_xxxx\SERIAL
-                        if id_upper.contains("VID_1235") {
-                            // Serial is the third segment after the second backslash
-                            let parts: Vec<&str> = id.split('\\').collect();
-                            if parts.len() >= 3 && !parts[2].is_empty() {
-                                let _ = SetupDiDestroyDeviceInfoList(dev_info);
-                                return Some(parts[2].to_string());
-                            }
+                {
+                    let id = String::from_utf16_lossy(&instance_id);
+                    let id = id.trim_end_matches('\0');
+                    let id_upper = id.to_uppercase();
+                    // Match Focusrite USB devices: USB\VID_1235&PID_xxxx\SERIAL
+                    if id_upper.contains("VID_1235") {
+                        // Serial is the third segment after the second backslash
+                        let parts: Vec<&str> = id.split('\\').collect();
+                        if parts.len() >= 3 && !parts[2].is_empty() {
+                            let _ = SetupDiDestroyDeviceInfoList(dev_info);
+                            return Some(parts[2].to_string());
                         }
                     }
                 }
-                let _ = SetupDiDestroyDeviceInfoList(dev_info);
             }
-            None
+            let _ = SetupDiDestroyDeviceInfoList(dev_info);
         }
+        None
     }
 
     impl ScarlettDevice for WindowsDevice {
@@ -1089,11 +1088,12 @@ pub fn enumerate_devices() -> Vec<DiscoveredDevice> {
 
 #[cfg(windows)]
 fn enumerate_devices_windows() -> Vec<DiscoveredDevice> {
+    let serial = windows_impl::find_usb_serial();
     let mut devices = Vec::new();
     win_enum::enumerate_pal_paths(|path| {
         devices.push(DiscoveredDevice {
             path,
-            serial: None, // serial requires additional USB enumeration
+            serial: serial.clone(),
         });
         None::<()> // continue enumerating
     });

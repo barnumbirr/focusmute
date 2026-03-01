@@ -1,7 +1,8 @@
-//! Focusmute CLI — hotkey mute control for Focusrite Scarlett 4th Gen interfaces.
+//! FocusMute CLI — hotkey mute control for Focusrite Scarlett 4th Gen interfaces.
 //!
 //! Console subsystem: works normally in PowerShell, cmd, and other terminals.
 
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use clap::Parser;
@@ -25,6 +26,10 @@ struct Args {
     /// Enable verbose (debug-level) logging
     #[arg(long, short = 'v', global = true)]
     verbose: bool,
+
+    /// Path to a custom config file (default: platform config directory)
+    #[arg(long, global = true)]
+    config: Option<PathBuf>,
 
     #[command(subcommand)]
     command: cli::Command,
@@ -61,7 +66,7 @@ fn main() {
         .ok();
     }
 
-    if let Err(e) = cli::run(args.command, args.json) {
+    if let Err(e) = cli::run(args.command, args.json, args.config.as_deref()) {
         eprintln!("Error: {e}");
         std::process::exit(1);
     }

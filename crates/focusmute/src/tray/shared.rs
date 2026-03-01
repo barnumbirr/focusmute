@@ -122,6 +122,7 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
     // Main event loop
     let menu_rx = MenuEvent::receiver();
     let hotkey_rx = GlobalHotKeyEvent::receiver();
+    let mut poll_thread_dead = false;
 
     loop {
         if !RUNNING.load(Ordering::SeqCst) {
@@ -140,20 +141,34 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
         }
 
         // 3. Drain mute polls (non-blocking)
-        while let Ok(Msg::MutePoll(muted)) = rx.try_recv() {
-            let (action, device_lost) = state.process_mute_poll(muted, device.as_ref());
-            if device_lost {
-                device = None;
-                tray_menu.set_device_connected(false);
+        loop {
+            match rx.try_recv() {
+                Ok(Msg::MutePoll(muted)) => {
+                    let (action, device_lost) = state.process_mute_poll(muted, device.as_ref());
+                    if device_lost {
+                        device = None;
+                        tray_menu.set_device_connected(false);
+                    }
+                    state::apply_mute_ui(action, &tray, &tray_menu, &state, &resources);
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    if !poll_thread_dead {
+                        log::error!("audio monitor thread stopped unexpectedly");
+                        poll_thread_dead = true;
+                    }
+                    break;
+                }
             }
-            state::apply_mute_ui(action, &tray, &tray_menu, &state, &resources);
         }
 
         // 4. Menu events
         while let Ok(event) = menu_rx.try_recv() {
             let toggle_mute = |is_muted: bool| {
-                if let Some(ref m) = main_monitor {
-                    let _ = m.set_muted(!is_muted);
+                if let Some(ref m) = main_monitor
+                    && let Err(e) = m.set_muted(!is_muted)
+                {
+                    log::warn!("failed to toggle mute: {e}");
                 }
             };
             let quit = state::handle_menu_event(
@@ -174,8 +189,9 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
         while let Ok(event) = hotkey_rx.try_recv() {
             if event.id == resources.hotkey.id
                 && let Some(ref m) = main_monitor
+                && let Err(e) = m.set_muted(!state.indicator.is_muted())
             {
-                let _ = m.set_muted(!state.indicator.is_muted());
+                log::warn!("failed to toggle mute: {e}");
             }
         }
 
@@ -183,12 +199,21 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
         P::wait_for_events();
     }
 
-    // Cleanup — join background thread, then restore LED state.
+    // Cleanup — join background thread, unmute, restore LEDs, then drop monitor.
     // Joining before drop ensures the monitor is dropped on the main thread
     // (important for COM cleanup on Windows).
     RUNNING.store(false, Ordering::SeqCst);
     if let Some(handle) = bg_handle {
         let _ = handle.join();
+    }
+
+    // Unmute all inputs so the user isn't left silently muted after exit
+    // (LEDs return to normal state and can no longer indicate mute).
+    if let Some(ref monitor) = main_monitor
+        && monitor.is_muted()
+        && let Err(e) = monitor.set_muted(false)
+    {
+        log::warn!("failed to unmute on exit: {e}");
     }
     drop(main_monitor);
 

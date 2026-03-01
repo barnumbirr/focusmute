@@ -20,6 +20,31 @@ mod ui;
 /// Maximum custom sound file size (10 MB).
 const MAX_SOUND_FILE_BYTES: u64 = 10 * 1024 * 1024;
 
+/// Holds a rodio output stream and sink for previewing sounds in the settings dialog.
+#[cfg(any(windows, target_os = "linux"))]
+pub(crate) struct SoundPreviewPlayer {
+    _stream: rodio::OutputStream,
+    sink: rodio::Sink,
+}
+
+#[cfg(any(windows, target_os = "linux"))]
+impl SoundPreviewPlayer {
+    pub fn try_new() -> Option<Self> {
+        let (stream, sink) = crate::sound::init_audio_output();
+        Some(SoundPreviewPlayer {
+            _stream: stream?,
+            sink: sink?,
+        })
+    }
+
+    pub fn play(&self, path: &str, fallback: &'static [u8]) {
+        // Stop any currently playing preview
+        self.sink.stop();
+        let sound = crate::sound::load_sound_data(path, fallback);
+        crate::sound::play_sound(&sound, &self.sink);
+    }
+}
+
 /// Build the mute_inputs dropdown items and find the selected index.
 pub(crate) fn inputs_combo_items(config: &Config, input_count: usize) -> (Vec<String>, usize) {
     let mut items = vec!["All".to_string()];
@@ -95,12 +120,12 @@ pub fn show_settings(
             viewport: eframe::egui::ViewportBuilder::default()
                 .with_inner_size([440.0, 390.0])
                 .with_resizable(false)
-                .with_title("Focusmute Settings")
+                .with_title("FocusMute Settings")
                 .with_icon(crate::icon::app_icon()),
             ..Default::default()
         };
         if let Err(e) = eframe::run_native(
-            "Focusmute Settings",
+            "FocusMute Settings",
             options,
             Box::new(move |cc| {
                 Ok(Box::new(ui::SettingsApp::new(

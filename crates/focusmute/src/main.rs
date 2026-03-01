@@ -1,4 +1,4 @@
-//! Focusmute — hotkey mute control for Focusrite Scarlett 4th Gen interfaces.
+//! FocusMute — hotkey mute control for Focusrite Scarlett 4th Gen interfaces.
 //!
 //! GUI subsystem: double-click from Explorer launches the system tray.
 //! If run from a terminal with arguments, redirects the user to focusmute-cli.
@@ -85,8 +85,37 @@ fn main() {
     #[cfg(any(windows, target_os = "linux"))]
     {
         if let Err(e) = tray::run() {
-            eprintln!("Error: {e}");
+            let msg = format!("Error: {e}");
+            eprintln!("{msg}");
+            show_fatal_error(&msg);
             std::process::exit(1);
         }
     }
+}
+
+/// Show a fatal error to the user. On Windows, displays a MessageBox since the
+/// tray binary has no console. On other platforms, the eprintln above suffices.
+#[cfg(windows)]
+fn show_fatal_error(msg: &str) {
+    use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
+    use windows::core::PCWSTR;
+
+    let wide_msg: Vec<u16> = msg.encode_utf16().chain(std::iter::once(0)).collect();
+    let title: Vec<u16> = "FocusMute"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    unsafe {
+        let _ = MessageBoxW(
+            None,
+            PCWSTR(wide_msg.as_ptr()),
+            PCWSTR(title.as_ptr()),
+            MB_ICONERROR | MB_OK,
+        );
+    }
+}
+
+#[cfg(not(windows))]
+fn show_fatal_error(_msg: &str) {
+    // On non-Windows platforms, eprintln above is visible from the terminal.
 }

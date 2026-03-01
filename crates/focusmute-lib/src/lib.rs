@@ -1,4 +1,4 @@
-//! Focusmute — hotkey mute control for Focusrite Scarlett 4th Gen interfaces.
+//! FocusMute — hotkey mute control for Focusrite Scarlett 4th Gen interfaces.
 
 pub mod audio;
 pub mod config;

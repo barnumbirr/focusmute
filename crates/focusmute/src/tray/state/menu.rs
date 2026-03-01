@@ -67,9 +67,9 @@ pub fn build_tray_icon(
     menu: Menu,
 ) -> focusmute_lib::error::Result<tray_icon::TrayIcon> {
     let initial_tooltip = if initial_muted {
-        "Focusmute — Muted"
+        "FocusMute — Muted"
     } else {
-        "Focusmute — Live"
+        "FocusMute — Live"
     };
     let initial_icon = if initial_muted {
         icon_muted()
@@ -104,7 +104,7 @@ fn show_notification(body: &str) {
     #[cfg(windows)]
     n.app_id(crate::tray::AUMID);
     #[cfg(target_os = "linux")]
-    n.summary("Focusmute");
+    n.summary("FocusMute");
     n.body(body);
     let _ = n.show();
 }
@@ -120,7 +120,7 @@ pub fn apply_mute_ui(
     match action {
         MonitorAction::ApplyMute => {
             tray.set_icon(Some(icon_muted())).ok();
-            tray.set_tooltip(Some("Focusmute — Muted")).ok();
+            tray.set_tooltip(Some("FocusMute — Muted")).ok();
             menu.status_item.set_text("Muted");
             if state.config.sound_enabled
                 && let Some(ref s) = resources.sink
@@ -133,7 +133,7 @@ pub fn apply_mute_ui(
         }
         MonitorAction::ClearMute => {
             tray.set_icon(Some(icon_live())).ok();
-            tray.set_tooltip(Some("Focusmute — Live")).ok();
+            tray.set_tooltip(Some("FocusMute — Live")).ok();
             menu.status_item.set_text("Live");
             if state.config.sound_enabled
                 && let Some(ref s) = resources.sink

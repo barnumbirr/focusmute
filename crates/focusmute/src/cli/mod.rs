@@ -10,6 +10,8 @@ mod predict;
 mod probe;
 mod status;
 
+use std::path::Path;
+
 use clap::Subcommand;
 use serde::Serialize;
 
@@ -179,12 +181,20 @@ pub enum Command {
     Devices,
 }
 
+/// Load config from a custom path or the default location.
+pub(super) fn load_config(path: Option<&Path>) -> Config {
+    match path {
+        Some(p) => Config::load_from(p).0,
+        None => Config::load(),
+    }
+}
+
 /// Warn if `--json` was passed to a command that doesn't support it.
 fn warn_json_unsupported(cmd_name: &str) {
     log::warn!("--json is not supported for `{cmd_name}` (ignored)");
 }
 
-pub fn run(cmd: Command, json: bool) -> Result<()> {
+pub fn run(cmd: Command, json: bool, config_path: Option<&Path>) -> Result<()> {
     match cmd {
         Command::Descriptor { offset, size } => {
             if json {
@@ -196,7 +206,7 @@ pub fn run(cmd: Command, json: bool) -> Result<()> {
             if json {
                 warn_json_unsupported("monitor");
             }
-            monitor::cmd_monitor()
+            monitor::cmd_monitor(config_path)
         }
         Command::Map {
             value,
@@ -219,8 +229,8 @@ pub fn run(cmd: Command, json: bool) -> Result<()> {
             probe::cmd_probe(dump_schema)
         }
         Command::Predict { schema_file } => predict::cmd_predict(schema_file, json),
-        Command::Config => config_cmd::cmd_config(json),
-        Command::Status => status::cmd_status(json),
+        Command::Config => config_cmd::cmd_config(json, config_path),
+        Command::Status => status::cmd_status(json, config_path),
         Command::Mute => {
             if json {
                 warn_json_unsupported("mute");
@@ -610,13 +620,13 @@ mod command_tests {
     fn cmd_config_succeeds() {
         // cmd_config reads the config (or defaults) and prints it.
         // Should never fail even without a config file.
-        let result = config_cmd::cmd_config(false);
+        let result = config_cmd::cmd_config(false, None);
         assert!(result.is_ok());
     }
 
     #[test]
     fn cmd_config_json_succeeds() {
-        let result = config_cmd::cmd_config(true);
+        let result = config_cmd::cmd_config(true, None);
         assert!(result.is_ok());
     }
 }
