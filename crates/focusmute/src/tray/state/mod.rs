@@ -45,7 +45,6 @@ pub struct TrayResources {
 
 impl TrayResources {
     pub fn init(config: &Config) -> focusmute_lib::error::Result<(Self, Vec<String>)> {
-        let (_audio_stream, sink) = sound::init_audio_output();
         let (mute_sound, mute_warn) =
             sound::load_sound_data(&config.sound.mute_sound_path, sound::SOUND_MUTED);
         let (unmute_sound, unmute_warn) =
@@ -57,8 +56,8 @@ impl TrayResources {
                 mute_sound,
                 unmute_sound,
                 hotkey,
-                sink,
-                _audio_stream,
+                sink: None,
+                _audio_stream: None,
                 notifier: crate::notification::Notifier::new(),
             },
             warnings,

@@ -113,7 +113,7 @@ pub fn apply_mute_ui(
     tray: &tray_icon::TrayIcon,
     menu: &TrayMenu,
     state: &TrayState,
-    resources: &TrayResources,
+    resources: &mut TrayResources,
 ) {
     match action {
         MonitorAction::ApplyMute => {
@@ -122,14 +122,12 @@ pub fn apply_mute_ui(
             tray.set_tooltip(Some("FocusMute — Muted")).ok();
             menu.status_item.set_text("Muted");
             if state.config.sound.sound_enabled {
-                match resources.sink {
-                    Some(ref s) => sound::play_sound(
-                        &resources.mute_sound,
-                        s,
-                        state.config.sound.mute_sound_volume,
-                    ),
-                    None => log::debug!("[sound] enabled but audio output unavailable"),
-                }
+                sound::play_sound(
+                    &resources.mute_sound,
+                    &mut resources._audio_stream,
+                    &mut resources.sink,
+                    state.config.sound.mute_sound_volume,
+                );
             }
             if state.config.system.notifications_enabled {
                 resources.notifier.show_mute_state("Microphone Muted");
@@ -141,14 +139,12 @@ pub fn apply_mute_ui(
             tray.set_tooltip(Some("FocusMute — Live")).ok();
             menu.status_item.set_text("Live");
             if state.config.sound.sound_enabled {
-                match resources.sink {
-                    Some(ref s) => sound::play_sound(
-                        &resources.unmute_sound,
-                        s,
-                        state.config.sound.unmute_sound_volume,
-                    ),
-                    None => log::debug!("[sound] enabled but audio output unavailable"),
-                }
+                sound::play_sound(
+                    &resources.unmute_sound,
+                    &mut resources._audio_stream,
+                    &mut resources.sink,
+                    state.config.sound.unmute_sound_volume,
+                );
             }
             if state.config.system.notifications_enabled {
                 resources.notifier.show_mute_state("Microphone Live");

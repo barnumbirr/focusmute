@@ -70,23 +70,34 @@ pub(crate) fn load_sound_data(
     }
 }
 
-/// Append a pre-decoded sound to an existing sink (non-blocking).
-pub(crate) fn play_sound(sound: &DecodedSound, sink: &Sink, volume: f32) {
-    sink.set_volume(volume);
-    let source = SamplesBuffer::new(sound.channels, sound.sample_rate, sound.samples.clone());
-    sink.append(source);
-}
-
-/// Initialize audio output, returning the stream and sink.
+/// Play a pre-decoded sound, re-acquiring the default audio output each time.
 ///
-/// Returns `(None, None)` if audio output is unavailable (e.g. headless systems).
-/// This avoids the `expect()` panic that Windows previously used.
-pub(crate) fn init_audio_output() -> (Option<rodio::OutputStream>, Option<Sink>) {
+/// Re-creating the `OutputStream` + `Sink` on every call ensures playback always
+/// targets the current default device. If the device changed since the last call
+/// (headphones plugged in, Bluetooth connected, suspend/resume invalidated the
+/// WASAPI endpoint), stale handles would silently swallow audio. The overhead is
+/// negligible for short notification beeps on infrequent mute toggles.
+///
+/// The previous stream/sink are replaced, which drops (and stops) any prior stream.
+pub(crate) fn play_sound(
+    sound: &DecodedSound,
+    audio_stream: &mut Option<rodio::OutputStream>,
+    sink: &mut Option<Sink>,
+    volume: f32,
+) {
     match rodio::OutputStream::try_default() {
-        Ok((stream, handle)) => (Some(stream), Sink::try_new(&handle).ok()),
+        Ok((stream, handle)) => {
+            if let Ok(new_sink) = Sink::try_new(&handle) {
+                new_sink.set_volume(volume);
+                let source =
+                    SamplesBuffer::new(sound.channels, sound.sample_rate, sound.samples.clone());
+                new_sink.append(source);
+                *audio_stream = Some(stream);
+                *sink = Some(new_sink);
+            }
+        }
         Err(e) => {
-            log::warn!("[sound] could not open audio output: {e}");
-            (None, None)
+            log::debug!("[sound] could not open audio output: {e}");
         }
     }
 }

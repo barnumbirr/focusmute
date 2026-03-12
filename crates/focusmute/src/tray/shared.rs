@@ -199,7 +199,7 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
                         device = None;
                         tray_menu.set_device_connected(false);
                     }
-                    state::apply_mute_ui(action, &tray, &tray_menu, &state, &resources);
+                    state::apply_mute_ui(action, &tray, &tray_menu, &state, &mut resources);
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => break,
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {

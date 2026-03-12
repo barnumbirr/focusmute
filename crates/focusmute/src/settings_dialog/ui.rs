@@ -41,7 +41,7 @@ pub struct SettingsApp {
     on_unmute_command: String,
 
     // ── Sound preview ──
-    preview_player: Option<SoundPreviewPlayer>,
+    preview_player: SoundPreviewPlayer,
 
     // ── Non-editable fields carried through ──
     original: Config,
@@ -110,7 +110,7 @@ impl SettingsApp {
             on_mute_command: config.hooks.on_mute_command.clone(),
             on_unmute_command: config.hooks.on_unmute_command.clone(),
 
-            preview_player: None,
+            preview_player: SoundPreviewPlayer::new(),
 
             original: config,
 
@@ -614,18 +614,13 @@ fn volume_row(
     volume: &mut f32,
     sound_path: &str,
     builtin_sound: &'static [u8],
-    preview_player: &mut Option<SoundPreviewPlayer>,
+    preview_player: &mut SoundPreviewPlayer,
 ) {
     ui.label("Volume");
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         let play_btn = egui::Button::new("Play").min_size(egui::vec2(browse_btn_width, 0.0));
         if ui.add(play_btn).clicked() {
-            if preview_player.is_none() {
-                *preview_player = SoundPreviewPlayer::try_new();
-            }
-            if let Some(player) = preview_player.as_ref() {
-                player.play(sound_path, builtin_sound, *volume);
-            }
+            preview_player.play(sound_path, builtin_sound, *volume);
         }
         let mut pct = *volume * 100.0;
         if ui

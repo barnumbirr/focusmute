@@ -23,25 +23,22 @@ const MAX_SOUND_FILE_BYTES: u64 = 10 * 1024 * 1024;
 /// Holds a rodio output stream and sink for previewing sounds in the settings dialog.
 #[cfg(any(windows, target_os = "linux"))]
 pub(crate) struct SoundPreviewPlayer {
-    _stream: rodio::OutputStream,
-    sink: rodio::Sink,
+    _stream: Option<rodio::OutputStream>,
+    sink: Option<rodio::Sink>,
 }
 
 #[cfg(any(windows, target_os = "linux"))]
 impl SoundPreviewPlayer {
-    pub fn try_new() -> Option<Self> {
-        let (stream, sink) = crate::sound::init_audio_output();
-        Some(SoundPreviewPlayer {
-            _stream: stream?,
-            sink: sink?,
-        })
+    pub fn new() -> Self {
+        SoundPreviewPlayer {
+            _stream: None,
+            sink: None,
+        }
     }
 
-    pub fn play(&self, path: &str, fallback: &'static [u8], volume: f32) {
-        // Stop any currently playing preview
-        self.sink.stop();
+    pub fn play(&mut self, path: &str, fallback: &'static [u8], volume: f32) {
         let (sound, _warning) = crate::sound::load_sound_data(path, fallback);
-        crate::sound::play_sound(&sound, &self.sink, volume);
+        crate::sound::play_sound(&sound, &mut self._stream, &mut self.sink, volume);
     }
 }
 
