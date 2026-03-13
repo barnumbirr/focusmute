@@ -41,10 +41,14 @@ pub fn reregister_hotkey(hk: &mut HotkeyState, new_hotkey_str: &str) {
             return; // old hotkey stays registered
         }
     };
-    let _ = hk.manager.unregister(hk.current);
+    if let Err(e) = hk.manager.unregister(hk.current) {
+        log::warn!("[hotkey] could not unregister old hotkey: {e}");
+    }
     if let Err(e) = hk.manager.register(new_hk) {
-        log::warn!("[config] could not register hotkey '{new_hotkey_str}': {e}");
-        let _ = hk.manager.register(hk.current); // restore old
+        log::warn!("[hotkey] could not register '{new_hotkey_str}': {e}");
+        if let Err(e) = hk.manager.register(hk.current) {
+            log::error!("[hotkey] could not restore previous hotkey: {e}");
+        }
     } else {
         hk.current = new_hk;
         hk.id = new_hk.id();

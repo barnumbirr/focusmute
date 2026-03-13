@@ -198,7 +198,9 @@ impl TrayState {
     pub fn set_initial_muted(&mut self, muted: bool, device: &impl ScarlettDevice) {
         self.indicator.force_state(muted);
         if muted {
-            let _ = self.indicator.apply_mute(device);
+            if let Err(e) = self.indicator.apply_mute(device) {
+                log::warn!("[mute] could not apply initial mute indicator: {e}");
+            }
         }
     }
 
@@ -300,7 +302,11 @@ impl TrayState {
                     if self.indicator.is_muted()
                         && let Some(dev) = device
                     {
-                        let _ = self.indicator.clear_mute(dev);
+                        if let Err(e) = self.indicator.clear_mute(dev) {
+                            log::warn!(
+                                "[mute] could not clear indicator before strategy switch: {e}"
+                            );
+                        }
                     }
                     self.indicator.set_strategy(new_strategy);
                 }
@@ -314,7 +320,9 @@ impl TrayState {
         if self.indicator.is_muted()
             && let Some(dev) = device
         {
-            let _ = self.indicator.apply_mute(dev);
+            if let Err(e) = self.indicator.apply_mute(dev) {
+                log::warn!("[mute] could not re-apply indicator after config change: {e}");
+            }
         }
 
         // Save to disk and update config

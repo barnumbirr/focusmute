@@ -86,18 +86,22 @@ pub(crate) fn play_sound(
     volume: f32,
 ) {
     match rodio::OutputStream::try_default() {
-        Ok((stream, handle)) => {
-            if let Ok(new_sink) = Sink::try_new(&handle) {
+        Ok((stream, handle)) => match Sink::try_new(&handle) {
+            Ok(new_sink) => {
                 new_sink.set_volume(volume);
                 let source =
                     SamplesBuffer::new(sound.channels, sound.sample_rate, sound.samples.clone());
                 new_sink.append(source);
                 *audio_stream = Some(stream);
                 *sink = Some(new_sink);
+                log::debug!("[sound] playback started (volume={volume:.0}%)");
             }
-        }
+            Err(e) => {
+                log::warn!("[sound] could not create audio sink: {e}");
+            }
+        },
         Err(e) => {
-            log::debug!("[sound] could not open audio output: {e}");
+            log::warn!("[sound] could not open audio output: {e}");
         }
     }
 }

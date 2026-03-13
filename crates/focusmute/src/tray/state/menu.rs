@@ -49,14 +49,19 @@ pub fn build_tray_menu(config: &Config, initial_muted: bool) -> (Menu, TrayMenu)
     let reconnect_item = MenuItem::new("Reconnect device", true, None);
     let quit_item = MenuItem::new("Quit", true, None);
 
-    let _ = menu.append(&status_item);
-    let _ = menu.append(&PredefinedMenuItem::separator());
-    let _ = menu.append(&toggle_item);
-    let _ = menu.append(&PredefinedMenuItem::separator());
-    let _ = menu.append(&settings_item);
-    let _ = menu.append(&reconnect_item);
-    let _ = menu.append(&PredefinedMenuItem::separator());
-    let _ = menu.append(&quit_item);
+    let append = |item: &dyn muda::IsMenuItem| {
+        if let Err(e) = menu.append(item) {
+            log::warn!("[menu] could not append menu item: {e}");
+        }
+    };
+    append(&status_item);
+    append(&PredefinedMenuItem::separator());
+    append(&toggle_item);
+    append(&PredefinedMenuItem::separator());
+    append(&settings_item);
+    append(&reconnect_item);
+    append(&PredefinedMenuItem::separator());
+    append(&quit_item);
 
     (
         menu,
