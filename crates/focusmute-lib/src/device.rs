@@ -82,6 +82,11 @@ impl std::fmt::Display for FirmwareVersion {
 }
 
 impl FirmwareVersion {
+    /// Returns true if all version fields are zero (uninitialized/unreadable).
+    pub fn is_zero(&self) -> bool {
+        self.major == 0 && self.minor == 0 && self.stage_release == 0 && self.build_nr == 0
+    }
+
     /// Parse firmware version from a 16-byte descriptor header.
     ///
     /// Layout: `[u32 unknown][u16 major][u16 minor][u32 stage_release][u32 build_nr]`
@@ -657,7 +662,7 @@ mod windows_impl {
                 IOCTL_TRANSACT,
                 &init_buf,
                 100,
-                WaitStrategy::Overlapped,
+                WaitStrategy::OverlappedTimeout(5000),
             )
             .map_err(|e| DeviceError::InitFailed(format!("USB_INIT: {e}")))?;
 
@@ -667,7 +672,7 @@ mod windows_impl {
                 IOCTL_TRANSACT,
                 &config_buf,
                 96,
-                WaitStrategy::Overlapped,
+                WaitStrategy::OverlappedTimeout(5000),
             )
             .map_err(|e| DeviceError::InitFailed(format!("GET_CONFIG: {e}")))?;
 
@@ -677,7 +682,9 @@ mod windows_impl {
                 ));
             }
 
-            let token = u64::from_le_bytes(config_raw[8..16].try_into().unwrap());
+            let token = u64::from_le_bytes(config_raw[8..16].try_into().map_err(|_| {
+                DeviceError::InitFailed("GET_CONFIG response malformed at token field".into())
+            })?);
 
             // Spawn the dedicated I/O worker thread (needs raw handle before wrapping)
             let io_tx = Self::spawn_io_worker(raw_handle);
@@ -703,6 +710,11 @@ mod windows_impl {
             // Read firmware version from descriptor header (offset 0, 16 bytes)
             if let Ok(hdr) = dev.get_descriptor(0, 16) {
                 dev.info.firmware = FirmwareVersion::from_descriptor_bytes(&hdr);
+            }
+            if dev.info.firmware.is_zero() {
+                log::warn!(
+                    "[device] firmware version defaulted to 0.0.0.0 — descriptor may be unreadable"
+                );
             }
 
             // Read device name from descriptor (offset 16, 32 bytes)
@@ -895,10 +907,33 @@ mod linux_impl {
                     )));
                 }
 
-                // Parse response header
-                let resp_cmd = u32::from_le_bytes(resp[0..4].try_into().unwrap());
-                let resp_seq = u16::from_le_bytes(resp[6..8].try_into().unwrap());
-                let resp_error = u32::from_le_bytes(resp[8..12].try_into().unwrap());
+                // Parse response header (bounds already checked above, but avoid panicking
+                // on malformed responses by using try_into + map_err)
+                let resp_cmd =
+                    u32::from_le_bytes(resp.get(0..4).and_then(|s| s.try_into().ok()).ok_or_else(
+                        || {
+                            DeviceError::TransactFailed(
+                                "response header truncated at cmd field".into(),
+                            )
+                        },
+                    )?);
+                let resp_seq =
+                    u16::from_le_bytes(resp.get(6..8).and_then(|s| s.try_into().ok()).ok_or_else(
+                        || {
+                            DeviceError::TransactFailed(
+                                "response header truncated at seq field".into(),
+                            )
+                        },
+                    )?);
+                let resp_error = u32::from_le_bytes(
+                    resp.get(8..12)
+                        .and_then(|s| s.try_into().ok())
+                        .ok_or_else(|| {
+                            DeviceError::TransactFailed(
+                                "response header truncated at error field".into(),
+                            )
+                        })?,
+                );
 
                 // Validate command echo
                 if resp_cmd != cmd {
@@ -1008,6 +1043,11 @@ mod linux_impl {
             if let Ok(hdr) = dev.get_descriptor(0, 16) {
                 dev.info.firmware = FirmwareVersion::from_descriptor_bytes(&hdr);
             }
+            if dev.info.firmware.is_zero() {
+                log::warn!(
+                    "[device] firmware version defaulted to 0.0.0.0 — descriptor may be unreadable"
+                );
+            }
 
             // Read device name from descriptor (offset 16, 32 bytes)
             if let Ok(name_bytes) = dev.get_descriptor(16, 32) {
@@ -1109,6 +1149,35 @@ pub struct DiscoveredDevice {
     pub path: String,
     /// USB serial number, if available.
     pub serial: Option<String>,
+}
+
+/// Check whether a Focusrite device interface path is still present.
+///
+/// Lightweight: only enumerates PAL interface paths (no serial lookup, no I/O).
+/// Safe to call from any thread.
+pub fn is_device_path_present(path: &str) -> bool {
+    #[cfg(windows)]
+    {
+        win_enum::enumerate_pal_paths(|p| {
+            if p.eq_ignore_ascii_case(path) {
+                Some(())
+            } else {
+                None
+            }
+        })
+        .is_some()
+    }
+    #[cfg(target_os = "linux")]
+    {
+        enumerate_devices_linux()
+            .iter()
+            .any(|d| d.path.eq_ignore_ascii_case(path))
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        let _ = path;
+        false
+    }
 }
 
 /// Enumerate all Focusrite device interfaces.

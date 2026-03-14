@@ -57,11 +57,6 @@ pub struct SettingsApp {
 
     /// Resize the viewport on the next frame.
     needs_resize: bool,
-    /// Previous collapsible section openness — resize while animating.
-    prev_advanced_openness: f32,
-    prev_about_openness: f32,
-    /// Previous error count — resize when errors appear or disappear.
-    prev_error_count: usize,
 }
 
 impl SettingsApp {
@@ -121,9 +116,6 @@ impl SettingsApp {
             result,
 
             needs_resize: true,
-            prev_advanced_openness: -1.0,
-            prev_about_openness: -1.0,
-            prev_error_count: 0,
         }
     }
 
@@ -210,8 +202,6 @@ impl eframe::App for SettingsApp {
         let form_snap = self.form_snapshot();
 
         let mut content_bottom = 0.0_f32;
-        let mut advanced_openness = 0.0_f32;
-        let mut about_openness = 0.0_f32;
         egui::CentralPanel::default().show(ctx, |ui| {
             // ── Mute Indicator section ──
             section_frame(ui, "Mute Indicator", |ui| {
@@ -221,7 +211,8 @@ impl eframe::App for SettingsApp {
                     .spacing([12.0, 8.0])
                     .show(ui, |ui| {
                         // Mute Inputs row
-                        ui.label("Mute Inputs");
+                        ui.label("Mute Inputs")
+                            .on_hover_text("Which input LEDs show the mute color");
                         let selected_text = self
                             .mute_inputs_items
                             .get(self.mute_inputs_index)
@@ -248,7 +239,8 @@ impl eframe::App for SettingsApp {
 
                             let text_response = ui.add(
                                 egui::TextEdit::singleline(&mut self.color_text)
-                                    .desired_width(ui.available_width()),
+                                    .desired_width(ui.available_width())
+                                    .hint_text("#FF0000 or red"),
                             );
                             if text_response.changed() {
                                 self.color_dirty = ColorDirty::Text;
@@ -271,7 +263,9 @@ impl eframe::App for SettingsApp {
                     .show(ui, |ui| {
                         ui.label("Hotkey");
                         ui.add(
-                            egui::TextEdit::singleline(&mut self.hotkey).desired_width(text_width),
+                            egui::TextEdit::singleline(&mut self.hotkey)
+                                .desired_width(text_width)
+                                .hint_text("e.g. Ctrl+Shift+M"),
                         );
                         ui.end_row();
                     });
@@ -367,94 +361,86 @@ impl eframe::App for SettingsApp {
 
             // ── Advanced section (collapsible, collapsed by default) ──
             ui.add_space(6.0);
-            let advanced_header =
-                egui::CollapsingHeader::new(egui::RichText::new("Advanced").strong().size(14.0))
-                    .default_open(false)
-                    .show_unindented(ui, |ui| {
-                        egui::Frame::group(ui.style())
-                            .inner_margin(egui::Margin::same(10))
-                            .show(ui, |ui| {
-                                ui.set_width(ui.available_width());
-                                let text_width = ui.available_width() - 4.0;
-                                ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new("Hooks").strong());
-                                    ui.label("ℹ").on_hover_ui(|ui| {
-                                        ui.label("Shell commands run when mute state changes.");
-                                        ui.horizontal(|ui| {
-                                            ui.label("Example:");
-                                            ui.label(
-                                                egui::RichText::new(
-                                                    "curl -X POST https://example.com/webhook",
-                                                )
-                                                .monospace(),
-                                            );
-                                        });
+            egui::CollapsingHeader::new(egui::RichText::new("Advanced").strong().size(14.0))
+                .default_open(false)
+                .show_unindented(ui, |ui| {
+                    egui::Frame::group(ui.style())
+                        .inner_margin(egui::Margin::same(10))
+                        .show(ui, |ui| {
+                            ui.set_width(ui.available_width());
+                            let text_width = ui.available_width() - 4.0;
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("Hooks").strong());
+                                ui.label("ℹ").on_hover_ui(|ui| {
+                                    ui.label("Shell commands run when mute state changes.");
+                                    ui.horizontal(|ui| {
+                                        ui.label("Example:");
+                                        ui.label(
+                                            egui::RichText::new(
+                                                "curl -X POST https://example.com/webhook",
+                                            )
+                                            .monospace(),
+                                        );
                                     });
                                 });
-                                ui.add_space(2.0);
-                                ui.label("On mute");
-                                ui.add(
-                                    egui::TextEdit::singleline(&mut self.on_mute_command)
-                                        .desired_width(text_width)
-                                        .hint_text("(none)"),
-                                );
-                                ui.add_space(4.0);
-                                ui.label("On unmute");
-                                ui.add(
-                                    egui::TextEdit::singleline(&mut self.on_unmute_command)
-                                        .desired_width(text_width)
-                                        .hint_text("(none)"),
-                                );
                             });
-                    });
-            advanced_openness = advanced_header.openness;
-
+                            ui.add_space(2.0);
+                            ui.label("On mute");
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.on_mute_command)
+                                    .desired_width(text_width)
+                                    .hint_text("(none)"),
+                            );
+                            ui.add_space(4.0);
+                            ui.label("On unmute");
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.on_unmute_command)
+                                    .desired_width(text_width)
+                                    .hint_text("(none)"),
+                            );
+                        });
+                });
             // ── About section (collapsible, collapsed by default) ──
             ui.add_space(6.0);
-            let about_header =
-                egui::CollapsingHeader::new(egui::RichText::new("About").strong().size(14.0))
-                    .default_open(false)
-                    .show_unindented(ui, |ui| {
-                        egui::Frame::group(ui.style())
-                            .inner_margin(egui::Margin::same(10))
-                            .show(ui, |ui| {
-                                ui.set_width(ui.available_width());
-                                let version = env!("CARGO_PKG_VERSION");
-                                ui.label(
-                                    egui::RichText::new(format!("FocusMute v{version}"))
-                                        .strong()
-                                        .size(15.0),
-                                );
-                                ui.add_space(2.0);
-                                ui.label(
-                                    "Hotkey mute control for Focusrite Scarlett 4th Gen interfaces",
-                                );
-                                ui.add_space(6.0);
+            egui::CollapsingHeader::new(egui::RichText::new("About").strong().size(14.0))
+                .default_open(false)
+                .show_unindented(ui, |ui| {
+                    egui::Frame::group(ui.style())
+                        .inner_margin(egui::Margin::same(10))
+                        .show(ui, |ui| {
+                            ui.set_width(ui.available_width());
+                            let version = env!("CARGO_PKG_VERSION");
+                            ui.label(
+                                egui::RichText::new(format!("FocusMute v{version}"))
+                                    .strong()
+                                    .size(15.0),
+                            );
+                            ui.add_space(2.0);
+                            ui.label(
+                                "Hotkey mute control for Focusrite Scarlett 4th Gen interfaces",
+                            );
+                            ui.add_space(6.0);
 
-                                egui::Grid::new("about_device_grid")
-                                    .num_columns(2)
-                                    .spacing([8.0, 4.0])
-                                    .show(ui, |ui| {
-                                        for (key, val) in &self.device_lines {
-                                            ui.label(
-                                                egui::RichText::new(format!("{key}:")).strong(),
-                                            );
-                                            ui.label(val);
-                                            ui.end_row();
-                                        }
-                                        ui.label("");
+                            egui::Grid::new("about_device_grid")
+                                .num_columns(2)
+                                .spacing([8.0, 4.0])
+                                .show(ui, |ui| {
+                                    for (key, val) in &self.device_lines {
+                                        ui.label(egui::RichText::new(format!("{key}:")).strong());
+                                        ui.label(val);
                                         ui.end_row();
-                                        ui.label(egui::RichText::new("Source:").strong());
-                                        ui.hyperlink_to(
-                                            "github.com/barnumbirr/focusmute",
-                                            "https://github.com/barnumbirr/focusmute",
-                                        );
-                                        ui.end_row();
-                                    });
-                            });
-                    });
-            about_openness = about_header.openness;
-
+                                    }
+                                    ui.label("");
+                                    ui.end_row();
+                                    ui.label(egui::RichText::new("Source:").strong());
+                                    ui.hyperlink_to(
+                                        "github.com/barnumbirr/focusmute",
+                                        "https://github.com/barnumbirr/focusmute",
+                                    );
+                                    ui.end_row();
+                                });
+                        });
+                });
             // ── Errors area ──
             if !self.errors.is_empty() {
                 ui.add_space(8.0);
@@ -498,24 +484,23 @@ impl eframe::App for SettingsApp {
             self.errors.clear();
         }
 
-        // Resize on the first frame and while any collapsible section animates.
-        // content_bottom is measured before the right-to-left button layout,
-        // so it reflects actual content height and doesn't depend on window
-        // size — no feedback loop.
-        let advanced_animating = (advanced_openness - self.prev_advanced_openness).abs() > 0.001;
-        let about_animating = (about_openness - self.prev_about_openness).abs() > 0.001;
-        let errors_changed = self.errors.len() != self.prev_error_count;
-        self.prev_advanced_openness = advanced_openness;
-        self.prev_about_openness = about_openness;
-        self.prev_error_count = self.errors.len();
-
-        if self.needs_resize || advanced_animating || about_animating || errors_changed {
-            self.needs_resize = false;
-            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
-                440.0,
-                (content_bottom + BUTTON_AREA_HEIGHT).round(),
-            )));
-        }
+        // Always enforce content-driven height (locks vertical resize) while
+        // preserving the user's chosen width (horizontal resize is free).
+        let target_height = (content_bottom + BUTTON_AREA_HEIGHT).round();
+        let current_width = ctx
+            .input(|i| i.viewport().inner_rect)
+            .map(|r| r.width())
+            .unwrap_or(440.0);
+        let width = if self.needs_resize {
+            440.0
+        } else {
+            current_width
+        };
+        self.needs_resize = false;
+        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
+            width,
+            target_height,
+        )));
     }
 }
 
@@ -597,7 +582,7 @@ pub(crate) fn build_and_validate_config(p: &ValidateParams<'_>) -> Result<Config
     // Validate hotkey syntax (global-hotkey crate parsing)
     let hotkey_str = p.hotkey.trim();
     if !hotkey_str.is_empty() && hotkey_str.parse::<global_hotkey::hotkey::HotKey>().is_err() {
-        errors.push(format!("Invalid hotkey syntax: \"{hotkey_str}\""));
+        errors.push("Invalid hotkey. Examples: Ctrl+Shift+M, Alt+F1".to_string());
     }
 
     if errors.is_empty() {
@@ -749,8 +734,8 @@ mod tests {
         assert!(result.is_err());
         let errs = result.unwrap_err();
         assert!(
-            errs.iter().any(|e| e.contains("Invalid hotkey syntax")),
-            "expected hotkey syntax error, got: {errs:?}"
+            errs.iter().any(|e| e.contains("Invalid hotkey")),
+            "expected hotkey error, got: {errs:?}"
         );
     }
 

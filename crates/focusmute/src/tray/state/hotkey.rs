@@ -10,7 +10,9 @@ pub struct HotkeyState {
 }
 
 /// Parse and register the initial global hotkey.
-pub fn register_hotkey(hotkey_str: &str) -> focusmute_lib::error::Result<HotkeyState> {
+///
+/// Returns the hotkey state and whether registration succeeded.
+pub fn register_hotkey(hotkey_str: &str) -> focusmute_lib::error::Result<(HotkeyState, bool)> {
     let manager = GlobalHotKeyManager::new().map_err(|e| {
         focusmute_lib::FocusmuteError::Config(format!("Failed to init hotkey manager: {e}"))
     })?;
@@ -18,14 +20,21 @@ pub fn register_hotkey(hotkey_str: &str) -> focusmute_lib::error::Result<HotkeyS
         .parse()
         .unwrap_or_else(|_| "Ctrl+Shift+M".parse().unwrap());
     let id = hotkey.id();
-    if let Err(e) = manager.register(hotkey) {
-        log::warn!("[hotkey] could not register '{hotkey_str}': {e}");
-    }
-    Ok(HotkeyState {
-        manager,
-        current: hotkey,
-        id,
-    })
+    let registered = match manager.register(hotkey) {
+        Ok(()) => true,
+        Err(e) => {
+            log::warn!("[hotkey] could not register '{hotkey_str}': {e}");
+            false
+        }
+    };
+    Ok((
+        HotkeyState {
+            manager,
+            current: hotkey,
+            id,
+        },
+        registered,
+    ))
 }
 
 /// Unregister the old hotkey and register a new one. Updates state in place.
@@ -33,12 +42,14 @@ pub fn register_hotkey(hotkey_str: &str) -> focusmute_lib::error::Result<HotkeyS
 /// Parses the new hotkey first so that the old one stays registered if the
 /// new string is invalid.  If registering the new hotkey fails, the old one
 /// is re-registered as a fallback.
-pub fn reregister_hotkey(hk: &mut HotkeyState, new_hotkey_str: &str) {
+///
+/// Returns `true` on success, `false` if registration failed (old hotkey restored).
+pub fn reregister_hotkey(hk: &mut HotkeyState, new_hotkey_str: &str) -> bool {
     let new_hk = match new_hotkey_str.parse::<HotKey>() {
         Ok(hk) => hk,
         Err(e) => {
             log::warn!("[config] invalid hotkey '{new_hotkey_str}': {e}");
-            return; // old hotkey stays registered
+            return false;
         }
     };
     if let Err(e) = hk.manager.unregister(hk.current) {
@@ -49,8 +60,9 @@ pub fn reregister_hotkey(hk: &mut HotkeyState, new_hotkey_str: &str) {
         if let Err(e) = hk.manager.register(hk.current) {
             log::error!("[hotkey] could not restore previous hotkey: {e}");
         }
-    } else {
-        hk.current = new_hk;
-        hk.id = new_hk.id();
+        return false;
     }
+    hk.current = new_hk;
+    hk.id = new_hk.id();
+    true
 }

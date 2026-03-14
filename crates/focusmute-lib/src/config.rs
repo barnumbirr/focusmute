@@ -322,6 +322,11 @@ impl Config {
         Self::dir().map(|d| d.join("focusmute.log"))
     }
 
+    /// Returns true if the config file does not yet exist on disk (first run).
+    pub fn is_first_run() -> bool {
+        Self::path().is_none_or(|p| !p.exists())
+    }
+
     /// Load config from disk, or return defaults if not found.
     pub fn load() -> Self {
         let (config, warnings) = Self::load_with_warnings();
@@ -335,12 +340,12 @@ impl Config {
     ///
     /// A header comment is prepended to the saved file.
     pub fn save_to(&self, path: &Path) -> std::io::Result<()> {
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
+        let dir = path.parent().unwrap_or(Path::new("."));
+        std::fs::create_dir_all(dir)?;
         let serialized = toml::to_string_pretty(self).map_err(std::io::Error::other)?;
         let contents = format!("{CONFIG_HEADER}{serialized}");
-        let tmp = path.with_extension("toml.tmp");
+        // Write temp file in the same directory as target (guaranteed same FS for atomic rename).
+        let tmp = dir.join(format!(".focusmute-config-{}.tmp", std::process::id()));
         std::fs::write(&tmp, &contents)?;
         match std::fs::rename(&tmp, path) {
             Ok(()) => Ok(()),
@@ -383,10 +388,8 @@ impl Config {
                 match toml::from_str::<LegacyConfig>(&contents) {
                     Ok(legacy) => (Config::from(legacy), vec![]),
                     Err(e) => {
-                        let warning = format!(
-                            "config parse error ({}), using defaults: {e}",
-                            path.display()
-                        );
+                        log::debug!("[config] TOML parse error: {e}");
+                        let warning = "Settings file corrupted. Using defaults.".to_string();
                         (Self::default(), vec![warning])
                     }
                 }
@@ -459,10 +462,10 @@ impl Config {
         match std::fs::metadata(p) {
             Ok(meta) => {
                 if meta.len() > max_size_bytes {
+                    let mb = max_size_bytes / 1_000_000;
                     return Err(crate::FocusmuteError::Config(format!(
-                        "File too large: {} bytes (max {})",
-                        meta.len(),
-                        max_size_bytes
+                        "Sound file too large ({} bytes). Maximum size is {mb} MB.",
+                        meta.len()
                     )));
                 }
             }
@@ -1727,7 +1730,7 @@ notifications_enabled = false
 
         let (config, warnings) = Config::load_from(&path);
         assert_eq!(warnings.len(), 1);
-        assert!(warnings[0].contains("config parse error"));
+        assert!(warnings[0].contains("corrupted"));
         assert_eq!(config.indicator.mute_color, "#FF0000");
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "focusmute"
-version = "0.7.3"
+version = "0.7.4"
 edition = "2024"
 description = "Hotkey mute control for Focusrite Scarlett interfaces"
 authors = ["Martin Simon"]
@@ -52,6 +52,7 @@ windows = { version = "0.61", features = [
     "Win32_System_Console",
     "Win32_System_LibraryLoader",
     "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
     "Win32_Foundation",
     "Data_Xml_Dom",
     "UI_Notifications",

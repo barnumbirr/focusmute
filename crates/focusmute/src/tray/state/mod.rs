@@ -49,8 +49,14 @@ impl TrayResources {
             sound::load_sound_data(&config.sound.mute_sound_path, sound::SOUND_MUTED);
         let (unmute_sound, unmute_warn) =
             sound::load_sound_data(&config.sound.unmute_sound_path, sound::SOUND_UNMUTED);
-        let hotkey = register_hotkey(&config.keyboard.hotkey)?;
-        let warnings: Vec<String> = [mute_warn, unmute_warn].into_iter().flatten().collect();
+        let (hotkey, hotkey_registered) = register_hotkey(&config.keyboard.hotkey)?;
+        let mut warnings: Vec<String> = [mute_warn, unmute_warn].into_iter().flatten().collect();
+        if !hotkey_registered {
+            warnings.push(format!(
+                "Could not register hotkey \"{}\". It may be in use by another application.",
+                config.keyboard.hotkey
+            ));
+        }
         Ok((
             Self {
                 mute_sound,
@@ -410,9 +416,15 @@ pub fn handle_menu_event(
             }
 
             if hotkey_changed {
-                reregister_hotkey(&mut resources.hotkey, &new_hotkey_str);
-                menu.toggle_item
-                    .set_text(format!("Toggle Mute\t{}", new_hotkey_str));
+                if reregister_hotkey(&mut resources.hotkey, &new_hotkey_str) {
+                    menu.toggle_item
+                        .set_text(format!("Toggle Mute\t{}", new_hotkey_str));
+                } else {
+                    crate::notification::Notifier::show_oneshot(&format!(
+                        "Could not register hotkey \"{new_hotkey_str}\". It may be in use by another application."
+                    ));
+                    // Keep old hotkey label in menu
+                }
             }
             log::info!("[settings] saved");
         } else {

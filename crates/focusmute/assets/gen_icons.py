@@ -20,6 +20,7 @@ from PIL import Image, ImageDraw
 
 # ── Colour palette ────────────────────────────────────────────────────
 GOLD = (221, 182, 105)
+GREY = (140, 140, 140)   # desaturated gold for disconnected state
 BG = (30, 30, 30)
 RED = (200, 40, 40, 255)
 RED_OUTLINE = (60, 15, 15, 255)
@@ -100,6 +101,22 @@ def _render_logo(size: int) -> Image.Image:
     return img
 
 
+def _desaturate(img: Image.Image) -> Image.Image:
+    """Replace the gold glyph colour with grey, keeping the same structure."""
+    result = img.copy()
+    pixels = result.load()
+    for y in range(result.height):
+        for x in range(result.width):
+            r, g, b, a = pixels[x, y]
+            if a > 0 and (r, g, b) != BG:
+                # Map gold tones to grey, preserving luminance relationship
+                lum = int(0.299 * r + 0.587 * g + 0.114 * b)
+                # Scale so the brightest gold maps to GREY
+                scaled = min(255, int(lum * GREY[0] / max(1, int(0.299 * GOLD[0] + 0.587 * GOLD[1] + 0.114 * GOLD[2]))))
+                pixels[x, y] = (scaled, scaled, scaled, a)
+    return result
+
+
 def _add_strikethrough(img: Image.Image) -> Image.Image:
     """Add a red diagonal strikethrough with dark outline."""
     size = img.width
@@ -166,6 +183,20 @@ def main():
 
     _save_ico(muted_images, out_dir / "icon-muted.ico")
     print(f"  icon-muted.ico (sizes: {ICO_SIZES})")
+
+    # Render disconnected icons (greyed-out)
+    print("Rendering disconnected icons...")
+    disc_images = []
+    for sz in ICO_SIZES:
+        base = _render_logo(sz)
+        disc = _desaturate(base)
+        disc_images.append(disc)
+        if sz == PNG_SIZE:
+            disc.save(str(out_dir / "icon-disconnected.png"))
+            print(f"  icon-disconnected.png ({sz}×{sz})")
+
+    _save_ico(disc_images, out_dir / "icon-disconnected.ico")
+    print(f"  icon-disconnected.ico (sizes: {ICO_SIZES})")
 
     print("Done.")
 

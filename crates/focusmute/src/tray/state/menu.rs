@@ -5,7 +5,7 @@ use focusmute_lib::monitor::MonitorAction;
 
 use muda::{Menu, MenuItem, PredefinedMenuItem};
 
-use super::icon::{icon_live, icon_muted};
+use super::icon::{icon_disconnected, icon_live, icon_muted};
 use super::{TrayResources, TrayState};
 use crate::sound;
 
@@ -30,11 +30,18 @@ impl TrayMenu {
         });
     }
 
-    /// Update menu state based on device connection status.
-    pub fn set_device_connected(&self, connected: bool) {
-        self.status_item
-            .set_text(if connected { "Live" } else { "Disconnected" });
+    /// Update menu and tray icon based on device connection status.
+    pub fn set_device_connected(&self, connected: bool, tray: &tray_icon::TrayIcon) {
+        self.status_item.set_text(if connected {
+            "Live"
+        } else {
+            "Connect a Scarlett 4th Gen device"
+        });
         self.set_reconnect_label(connected);
+        if !connected {
+            tray.set_icon(Some(icon_disconnected())).ok();
+            tray.set_tooltip(Some("FocusMute — Disconnected")).ok();
+        }
     }
 }
 
@@ -78,17 +85,15 @@ pub fn build_tray_menu(config: &Config, initial_muted: bool) -> (Menu, TrayMenu)
 /// Build the tray icon with the correct initial state.
 pub fn build_tray_icon(
     initial_muted: bool,
+    device_connected: bool,
     menu: Menu,
 ) -> focusmute_lib::error::Result<tray_icon::TrayIcon> {
-    let initial_tooltip = if initial_muted {
-        "FocusMute — Muted"
+    let (initial_tooltip, initial_icon) = if !device_connected {
+        ("FocusMute — Disconnected", icon_disconnected())
+    } else if initial_muted {
+        ("FocusMute — Muted", icon_muted())
     } else {
-        "FocusMute — Live"
-    };
-    let initial_icon = if initial_muted {
-        icon_muted()
-    } else {
-        icon_live()
+        ("FocusMute — Live", icon_live())
     };
     tray_icon::TrayIconBuilder::new()
         .with_tooltip(initial_tooltip)
@@ -113,13 +118,21 @@ pub(crate) fn show_startup_warnings(warnings: &[String]) {
 }
 
 /// Apply mute-state UI updates to the tray icon and status item.
+///
+/// When `device_connected` is false, all UI/sound/notification updates are
+/// suppressed — the audio interface is unplugged so the input states are
+/// meaningless.
 pub fn apply_mute_ui(
     action: MonitorAction,
     tray: &tray_icon::TrayIcon,
     menu: &TrayMenu,
     state: &TrayState,
     resources: &mut TrayResources,
+    device_connected: bool,
 ) {
+    if !device_connected {
+        return;
+    }
     match action {
         MonitorAction::ApplyMute => {
             log::info!("[mute] muted");

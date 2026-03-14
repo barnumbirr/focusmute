@@ -5,6 +5,7 @@ use tray_icon::Icon;
 // Embedded tray icons (multi-size ICO files).
 pub(crate) const ICON_LIVE_ICO: &[u8] = include_bytes!("../../../assets/icon-live.ico");
 const ICON_MUTED_ICO: &[u8] = include_bytes!("../../../assets/icon-muted.ico");
+const ICON_DISCONNECTED_ICO: &[u8] = include_bytes!("../../../assets/icon-disconnected.ico");
 
 /// Target size when extracting icons from ICO files.  32 px is a good
 /// compromise: Windows tray icons range from 16 px (100 % DPI) to 32 px
@@ -115,6 +116,14 @@ pub fn icon_muted() -> Icon {
         .to_icon()
 }
 
+pub fn icon_disconnected() -> Icon {
+    use std::sync::OnceLock;
+    static CACHE: OnceLock<CachedIcon> = OnceLock::new();
+    CACHE
+        .get_or_init(|| CachedIcon::decode(ICON_DISCONNECTED_ICO))
+        .to_icon()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -209,5 +218,9 @@ mod tests {
         let muted = decode_ico_entry(ICON_MUTED_ICO, TRAY_ICON_SIZE).unwrap();
         assert_eq!(muted.width(), 32);
         assert_eq!(muted.height(), 32);
+
+        let disconnected = decode_ico_entry(ICON_DISCONNECTED_ICO, TRAY_ICON_SIZE).unwrap();
+        assert_eq!(disconnected.width(), 32);
+        assert_eq!(disconnected.height(), 32);
     }
 }

@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.4] - 2026-03-14
+
+### Added
+
+- Disconnected tray icon — grey desaturated icon with "Disconnected" tooltip when no Scarlett device is connected
+- Event-driven USB hotplug detection — uses `RegisterDeviceNotificationW` (same approach as Focusrite Control 2) for instant disconnect/reconnect detection on Windows
+- First-run welcome notification with hotkey reminder and settings hint
+- Settings dialog hint text on hotkey field ("e.g. Ctrl+Shift+M"), color field ("#FF0000 or red"), and tooltip on Mute Inputs
+- Hotkey registration failure notification at startup and when changing hotkey in settings
+- `FirmwareVersion::is_zero()` method with warning when firmware version defaults to 0.0.0.0
+- `is_device_path_present()` lightweight device enumeration (PAL interface only, no serial lookup)
+
+### Changed
+
+- Settings dialog resizable in width only — height auto-adjusts to content (Advanced/About sections)
+- Mute UI (icon, sound, notifications) suppressed when device is disconnected — audio interface is unplugged so input states are meaningless
+- User-friendly error messages: "Invalid hotkey. Examples: Ctrl+Shift+M, Alt+F1" (was raw syntax error), "Settings file corrupted. Using defaults." (was TOML error detail), "Sound file too large. Maximum size is 10 MB." (was raw byte count)
+- Disconnected status shows "Connect a Scarlett 4th Gen device" instead of "Disconnected"
+- Init sequence IOCTLs (USB_INIT, GET_CONFIG) use 5-second timeout instead of infinite wait
+- Config temp file uses PID-based name in parent directory for robust atomic writes
+- Shutdown skips LED restore when app was in live state (avoids spurious IOCTL error)
+- Shutdown background thread join uses 3-second timeout instead of blocking indefinitely
+
+### Fixed
+
+- USB response parsing no longer panics on malformed responses — returns error instead of unwrapping
+- CLI monitor logs LED apply errors instead of silently discarding them
+
 ## [0.7.3] - 2026-03-13
 
 ### Changed

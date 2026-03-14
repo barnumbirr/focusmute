@@ -41,6 +41,15 @@ pub trait PlatformAdapter {
 
     /// Block until the next platform event or a reasonable timeout.
     fn wait_for_events();
+
+    /// Register for device hotplug notifications (called once at startup).
+    fn register_device_notifications() {}
+
+    /// Check whether a device-removed event has fired since the last call.
+    /// Resets the flag so subsequent calls return false until the next event.
+    fn check_device_removed() -> bool {
+        false
+    }
 }
 
 /// Shared tray event loop.
@@ -54,6 +63,7 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
     // Open device and initialise shared state.
     // If the device isn't connected yet, start with a no-op strategy and
     // let the reconnect loop pick it up later.
+    let first_run = Config::is_first_run();
     let (config, parse_warnings) = Config::load_with_warnings();
     for w in &parse_warnings {
         log::warn!("[config] {w}");
@@ -126,14 +136,15 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
     let (mut resources, sound_warnings) = TrayResources::init(&state.config)?;
 
     // Build tray menu and icon
+    let device_connected = device.is_some();
     let (menu, tray_menu) = state::build_tray_menu(&state.config, initial_muted);
-    let tray = state::build_tray_icon(initial_muted, menu)?;
+    let tray = state::build_tray_icon(initial_muted, device_connected, menu)?;
 
     // If no device at startup, show disconnected status immediately.
     // When connected, only update the reconnect label — the status text
     // already reflects the initial mute state from build_tray_menu.
-    if device.is_none() {
-        tray_menu.set_device_connected(false);
+    if !device_connected {
+        tray_menu.set_device_connected(false, &tray);
     } else {
         tray_menu.set_reconnect_label(true);
     }
@@ -156,6 +167,14 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
         }
     }
 
+    // First-run welcome notification
+    if first_run {
+        let hotkey = &state.config.keyboard.hotkey;
+        crate::notification::Notifier::show_oneshot(&format!(
+            "FocusMute running. Hotkey: {hotkey}. Right-click tray icon for settings."
+        ));
+    }
+
     // Channel for background → main thread communication
     let (tx, rx): (mpsc::Sender<Msg>, Receiver<Msg>) = mpsc::channel();
 
@@ -167,6 +186,9 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
         None
     };
 
+    // Register for USB device hotplug notifications (event-driven, no polling).
+    P::register_device_notifications();
+
     // Main event loop
     let menu_rx = MenuEvent::receiver();
     let hotkey_rx = GlobalHotKeyEvent::receiver();
@@ -177,8 +199,16 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
             break;
         }
 
-        // 1. Platform event pump
+        // 1. Platform event pump — dispatches WM_DEVICECHANGE (among others)
+        //    which sets the device-removed flag checked below.
         P::pump_events();
+
+        // 1b. Device removal detection (event-driven via RegisterDeviceNotification).
+        if device.is_some() && P::check_device_removed() {
+            log::warn!("[device] removed (USB hotplug event)");
+            device = None;
+            tray_menu.set_device_connected(false, &tray);
+        }
 
         // 2. Reconnect
         if device.is_none()
@@ -186,10 +216,19 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
         {
             log::info!("[device] reconnected: {}", new_dev.info().device_name);
             device = Some(new_dev);
-            tray_menu.set_device_connected(true);
+            tray_menu.set_device_connected(true, &tray);
+            // Restore correct icon based on current mute state
+            if state.indicator.is_muted() {
+                tray.set_icon(Some(state::icon::icon_muted())).ok();
+                tray.set_tooltip(Some("FocusMute — Muted")).ok();
+                tray_menu.status_item.set_text("Muted");
+            } else {
+                tray.set_icon(Some(state::icon::icon_live())).ok();
+                tray.set_tooltip(Some("FocusMute — Live")).ok();
+            }
         }
 
-        // 3. Drain mute polls (non-blocking)
+        // 3. Drain background messages (non-blocking)
         loop {
             match rx.try_recv() {
                 Ok(Msg::MutePoll(muted)) => {
@@ -197,9 +236,16 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
                     if device_lost {
                         log::warn!("[device] disconnected (communication error)");
                         device = None;
-                        tray_menu.set_device_connected(false);
+                        tray_menu.set_device_connected(false, &tray);
                     }
-                    state::apply_mute_ui(action, &tray, &tray_menu, &state, &mut resources);
+                    state::apply_mute_ui(
+                        action,
+                        &tray,
+                        &tray_menu,
+                        &state,
+                        &mut resources,
+                        device.is_some(),
+                    );
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => break,
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
@@ -235,7 +281,7 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
             }
             if force_reconnect {
                 device = None;
-                tray_menu.set_device_connected(false);
+                tray_menu.set_device_connected(false, &tray);
             }
         }
 
@@ -259,7 +305,22 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
     log::info!("[focusmute] shutting down");
     RUNNING.store(false, Ordering::SeqCst);
     if let Some(handle) = bg_handle {
-        let _ = handle.join();
+        // Timed join: spawn a helper thread that joins the background thread,
+        // and wait up to 3 seconds for it to finish. If the poll thread is stuck,
+        // we proceed with shutdown rather than hanging indefinitely.
+        let (done_tx, done_rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = handle.join();
+            let _ = done_tx.send(());
+        });
+        if done_rx
+            .recv_timeout(std::time::Duration::from_secs(3))
+            .is_err()
+        {
+            log::warn!(
+                "[focusmute] poll thread did not exit within 3 s — proceeding with shutdown"
+            );
+        }
     }
 
     // Unmute all inputs so the user isn't left silently muted after exit
@@ -274,8 +335,12 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
     }
     drop(main_monitor);
 
-    if let Some(ref dev) = device {
-        state.restore_on_exit(dev);
+    // Only restore LEDs if we were muted (i.e. we actually changed them).
+    // Skipping when live avoids a spurious IOCTL that can fail during shutdown.
+    if state.indicator.is_muted() {
+        if let Some(ref dev) = device {
+            state.restore_on_exit(dev);
+        }
     }
     Ok(())
 }
