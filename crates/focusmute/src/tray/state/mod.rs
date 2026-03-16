@@ -4,15 +4,15 @@
 //! This module provides:
 //! - Core `TrayState` (config, indicator, reconnection)
 //! - Menu + tray icon construction (`build_tray_menu`, `build_tray_icon`)
-//! - Hotkey management (`HotkeyState`, `register_hotkey`, `reregister_hotkey`)
-//! - Settings result handling (`handle_settings_result`)
+//! - Hotkey management (`HotkeyState`, `register_hotkeys`, toggle + PTT)
+//! - Settings result handling (`handle_settings_result`, `SettingsChanges`)
 //! - Icon caching, autostart helpers
 
 mod hotkey;
 pub(crate) mod icon;
 mod menu;
 
-pub use hotkey::{HotkeyState, register_hotkey, reregister_hotkey};
+pub use hotkey::{HotkeyState, register_hotkeys, reregister_ptt, reregister_toggle};
 pub(crate) use menu::show_startup_warnings;
 pub use menu::{TrayMenu, apply_mute_ui, build_tray_icon, build_tray_menu};
 
@@ -28,6 +28,17 @@ use muda::MenuEvent;
 
 use crate::sound;
 
+/// What changed after applying a settings dialog result.
+pub struct SettingsChanges {
+    pub warnings: Vec<String>,
+    pub mute_sound_changed: bool,
+    pub unmute_sound_changed: bool,
+    pub toggle_changed: bool,
+    pub new_toggle_str: String,
+    pub ptt_changed: bool,
+    pub new_ptt_str: String,
+}
+
 // ── Audio/hotkey resource bundle ──
 
 /// Bundles audio playback and hotkey resources that clutter function signatures.
@@ -38,8 +49,8 @@ pub struct TrayResources {
     pub mute_sound: sound::DecodedSound,
     pub unmute_sound: sound::DecodedSound,
     pub hotkey: HotkeyState,
-    pub sink: Option<rodio::Sink>,
-    pub _audio_stream: Option<rodio::OutputStream>,
+    pub player: Option<rodio::Player>,
+    pub _device_sink: Option<rodio::MixerDeviceSink>,
     pub notifier: crate::notification::Notifier,
 }
 
@@ -49,21 +60,19 @@ impl TrayResources {
             sound::load_sound_data(&config.sound.mute_sound_path, sound::SOUND_MUTED);
         let (unmute_sound, unmute_warn) =
             sound::load_sound_data(&config.sound.unmute_sound_path, sound::SOUND_UNMUTED);
-        let (hotkey, hotkey_registered) = register_hotkey(&config.keyboard.hotkey)?;
+        let (hotkey, hotkey_warnings) = register_hotkeys(
+            &config.keyboard.hotkey,
+            &config.keyboard.push_to_talk_hotkey,
+        )?;
         let mut warnings: Vec<String> = [mute_warn, unmute_warn].into_iter().flatten().collect();
-        if !hotkey_registered {
-            warnings.push(format!(
-                "Could not register hotkey \"{}\". It may be in use by another application.",
-                config.keyboard.hotkey
-            ));
-        }
+        warnings.extend(hotkey_warnings);
         Ok((
             Self {
                 mute_sound,
                 unmute_sound,
                 hotkey,
-                sink: None,
-                _audio_stream: None,
+                player: None,
+                _device_sink: None,
                 notifier: crate::notification::Notifier::new(),
             },
             warnings,
@@ -341,29 +350,32 @@ impl TrayState {
     }
 
     /// Handle settings dialog result: apply config, return what changed.
-    ///
-    /// Returns `(warnings, mute_sound_changed, unmute_sound_changed, hotkey_changed, new_hotkey_str)`.
     pub fn handle_settings_result(
         &mut self,
         new_config: Config,
         device: Option<&impl ScarlettDevice>,
-    ) -> (Vec<String>, bool, bool, bool, String) {
+    ) -> SettingsChanges {
         let mute_sound_changed =
             new_config.sound.mute_sound_path != self.config.sound.mute_sound_path;
         let unmute_sound_changed =
             new_config.sound.unmute_sound_path != self.config.sound.unmute_sound_path;
-        let hotkey_changed = new_config.keyboard.hotkey != self.config.keyboard.hotkey;
-        let new_hotkey_str = new_config.keyboard.hotkey.clone();
+        let toggle_changed = new_config.keyboard.hotkey != self.config.keyboard.hotkey;
+        let new_toggle_str = new_config.keyboard.hotkey.clone();
+        let ptt_changed =
+            new_config.keyboard.push_to_talk_hotkey != self.config.keyboard.push_to_talk_hotkey;
+        let new_ptt_str = new_config.keyboard.push_to_talk_hotkey.clone();
 
         let warnings = self.apply_config(new_config, device);
 
-        (
+        SettingsChanges {
             warnings,
             mute_sound_changed,
             unmute_sound_changed,
-            hotkey_changed,
-            new_hotkey_str,
-        )
+            toggle_changed,
+            new_toggle_str,
+            ptt_changed,
+            new_ptt_str,
+        }
     }
 
     /// Restore LED state on exit.
@@ -396,18 +408,17 @@ pub fn handle_menu_event(
         if let Some(new_config) =
             crate::settings_dialog::show_settings(&state.config, profile, info)
         {
-            let (warnings, mute_changed, unmute_changed, hotkey_changed, new_hotkey_str) =
-                state.handle_settings_result(new_config, device.as_ref());
-            for w in &warnings {
+            let changes = state.handle_settings_result(new_config, device.as_ref());
+            for w in &changes.warnings {
                 log::warn!("[config] {w}");
             }
 
-            if mute_changed {
+            if changes.mute_sound_changed {
                 resources.mute_sound =
                     sound::load_sound_data(&state.config.sound.mute_sound_path, sound::SOUND_MUTED)
                         .0;
             }
-            if unmute_changed {
+            if changes.unmute_sound_changed {
                 resources.unmute_sound = sound::load_sound_data(
                     &state.config.sound.unmute_sound_path,
                     sound::SOUND_UNMUTED,
@@ -415,16 +426,22 @@ pub fn handle_menu_event(
                 .0;
             }
 
-            if hotkey_changed {
-                if reregister_hotkey(&mut resources.hotkey, &new_hotkey_str) {
+            if changes.toggle_changed {
+                if reregister_toggle(&mut resources.hotkey, &changes.new_toggle_str) {
                     menu.toggle_item
-                        .set_text(format!("Toggle Mute\t{}", new_hotkey_str));
+                        .set_text(format!("Toggle Mute\t{}", changes.new_toggle_str));
                 } else {
                     crate::notification::Notifier::show_oneshot(&format!(
-                        "Could not register hotkey \"{new_hotkey_str}\". It may be in use by another application."
+                        "Could not register hotkey \"{}\". It may be in use by another application.",
+                        changes.new_toggle_str,
                     ));
-                    // Keep old hotkey label in menu
                 }
+            }
+            if changes.ptt_changed && !reregister_ptt(&mut resources.hotkey, &changes.new_ptt_str) {
+                crate::notification::Notifier::show_oneshot(&format!(
+                    "Could not register push-to-talk hotkey \"{}\". It may be in use by another application.",
+                    changes.new_ptt_str,
+                ));
             }
             log::info!("[settings] saved");
         } else {
@@ -584,15 +601,17 @@ mod tests {
 
         let mut new_config = state.config.clone();
         new_config.keyboard.hotkey = "F12".into();
+        new_config.keyboard.push_to_talk_hotkey = "Ctrl+Space".into();
         new_config.sound.mute_sound_path = "/some/new/path.wav".into();
 
-        let (_, mute_changed, unmute_changed, hotkey_changed, new_hk) =
-            state.handle_settings_result(new_config, Some(&dev));
+        let changes = state.handle_settings_result(new_config, Some(&dev));
 
-        assert!(mute_changed);
-        assert!(!unmute_changed);
-        assert!(hotkey_changed);
-        assert_eq!(new_hk, "F12");
+        assert!(changes.mute_sound_changed);
+        assert!(!changes.unmute_sound_changed);
+        assert!(changes.toggle_changed);
+        assert_eq!(changes.new_toggle_str, "F12");
+        assert!(changes.ptt_changed);
+        assert_eq!(changes.new_ptt_str, "Ctrl+Space");
     }
 
     // Phase 3.2 — reconnect integration flow tests
@@ -655,8 +674,8 @@ mod tests {
 
         let mut new_config = state.config.clone();
         new_config.indicator.mute_color = "#00FF00".into();
-        let (warnings, _, _, _, _) = state.handle_settings_result(new_config, Some(&dev));
-        assert!(warnings.is_empty());
+        let changes = state.handle_settings_result(new_config, Some(&dev));
+        assert!(changes.warnings.is_empty());
         assert_ne!(
             state.indicator.mute_color(),
             original_color,

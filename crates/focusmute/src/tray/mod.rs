@@ -63,14 +63,17 @@ fn enable_dark_mode_menus() {
     /// `AllowDark` variant of the undocumented `PreferredAppMode` enum.
     const ALLOW_DARK: u32 = 1;
 
+    // SAFETY: LoadLibraryW/GetProcAddress are standard Win32 FFI.
+    // Ordinals 135/136 are well-known undocumented uxtheme.dll exports
+    // (SetPreferredAppMode / FlushMenuThemes) used by Chrome, Firefox,
+    // and Windows Terminal for dark context menus. The transmutes convert
+    // non-null function pointers returned by GetProcAddress to the known
+    // calling conventions of these exports.
     unsafe {
         let Ok(module) = LoadLibraryW(::windows::core::w!("uxtheme.dll")) else {
             return;
         };
 
-        // Ordinal 135 = SetPreferredAppMode, ordinal 136 = FlushMenuThemes.
-        // Undocumented uxtheme.dll exports used by Chrome, Firefox, and
-        // Windows Terminal for dark context menus.
         let set_mode = GetProcAddress(module, ::windows::core::PCSTR::from_raw(135 as *const u8));
         let flush = GetProcAddress(module, ::windows::core::PCSTR::from_raw(136 as *const u8));
 

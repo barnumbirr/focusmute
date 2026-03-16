@@ -142,8 +142,8 @@ pub fn apply_mute_ui(
             if state.config.sound.sound_enabled {
                 sound::play_sound(
                     &resources.mute_sound,
-                    &mut resources._audio_stream,
-                    &mut resources.sink,
+                    &mut resources._device_sink,
+                    &mut resources.player,
                     state.config.sound.mute_sound_volume,
                 );
             }
@@ -159,8 +159,8 @@ pub fn apply_mute_ui(
             if state.config.sound.sound_enabled {
                 sound::play_sound(
                     &resources.unmute_sound,
-                    &mut resources._audio_stream,
-                    &mut resources.sink,
+                    &mut resources._device_sink,
+                    &mut resources.player,
                     state.config.sound.unmute_sound_volume,
                 );
             }

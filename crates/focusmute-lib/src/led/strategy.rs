@@ -207,7 +207,13 @@ fn build_mute_colors(
             let key = (idx + 1).to_string();
             input_colors
                 .get(&key)
-                .and_then(|c| parse_color(c).ok())
+                .and_then(|c| {
+                    parse_color(c)
+                        .inspect_err(|_| {
+                            log::warn!("[led] invalid input color for input {}: {c}", idx + 1);
+                        })
+                        .ok()
+                })
                 .unwrap_or(global_mute_color)
         })
         .collect()

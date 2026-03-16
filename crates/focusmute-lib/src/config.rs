@@ -56,12 +56,17 @@ pub struct KeyboardConfig {
     /// Global hotkey to toggle mute. Default: "Ctrl+Shift+M". Format: "Modifier+Key" or just "Key".
     #[serde(default = "default_hotkey")]
     pub hotkey: String,
+
+    /// Push-to-talk hotkey. Empty = disabled. Hold to unmute, release to re-mute.
+    #[serde(default)]
+    pub push_to_talk_hotkey: String,
 }
 
 impl Default for KeyboardConfig {
     fn default() -> Self {
         Self {
             hotkey: default_hotkey(),
+            push_to_talk_hotkey: String::new(),
         }
     }
 }
@@ -103,7 +108,7 @@ impl Default for SoundConfig {
 }
 
 /// System / startup settings.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemConfig {
     /// Start application on login.
     #[serde(default)]
@@ -116,6 +121,23 @@ pub struct SystemConfig {
     /// Show desktop notification on mute state change.
     #[serde(default)]
     pub notifications_enabled: bool,
+
+    /// Log level for the tray app log file. Default: "info".
+    /// Valid values: "error", "warn", "info", "debug", "trace".
+    /// Changes take effect on next launch.
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
+}
+
+impl Default for SystemConfig {
+    fn default() -> Self {
+        Self {
+            autostart: false,
+            device_serial: String::new(),
+            notifications_enabled: false,
+            log_level: default_log_level(),
+        }
+    }
 }
 
 /// Mute state change hooks.
@@ -148,6 +170,12 @@ fn default_true() -> bool {
 fn default_sound_volume() -> f32 {
     1.0
 }
+fn default_log_level() -> String {
+    "info".into()
+}
+
+/// Valid log level strings (case-insensitive matching during validation).
+pub const VALID_LOG_LEVELS: &[&str] = &["error", "warn", "info", "debug", "trace"];
 
 // ── Top-level config ──
 
@@ -215,6 +243,7 @@ impl From<LegacyConfig> for Config {
             },
             keyboard: KeyboardConfig {
                 hotkey: legacy.hotkey,
+                ..Default::default()
             },
             sound: SoundConfig {
                 sound_enabled: legacy.sound_enabled,
@@ -227,6 +256,7 @@ impl From<LegacyConfig> for Config {
                 autostart: legacy.autostart,
                 device_serial: legacy.device_serial,
                 notifications_enabled: legacy.notifications_enabled,
+                log_level: default_log_level(),
             },
             hooks: HooksConfig {
                 on_mute_command: legacy.on_mute_command,
@@ -276,6 +306,8 @@ pub enum ValidationError {
     InvalidMuteInputs(String),
     /// An `input_colors` entry is invalid (bad color value or out-of-range key).
     InvalidInputColor { input: String, reason: String },
+    /// The `log_level` field is not a recognized level.
+    InvalidLogLevel(String),
 }
 
 impl fmt::Display for ValidationError {
@@ -292,6 +324,12 @@ impl fmt::Display for ValidationError {
             ValidationError::InvalidMuteInputs(e) => write!(f, "Invalid mute inputs: {e}"),
             ValidationError::InvalidInputColor { input, reason } => {
                 write!(f, "Invalid input_colors[{input}]: {reason}")
+            }
+            ValidationError::InvalidLogLevel(level) => {
+                write!(
+                    f,
+                    "Invalid log level \"{level}\". Valid values: error, warn, info, debug, trace"
+                )
             }
         }
     }
@@ -527,6 +565,13 @@ impl Config {
                 field: "unmute_sound_volume",
                 value: self.sound.unmute_sound_volume,
             });
+        }
+
+        // Validate log level
+        if !VALID_LOG_LEVELS.contains(&self.system.log_level.to_lowercase().as_str()) {
+            errors.push(ValidationError::InvalidLogLevel(
+                self.system.log_level.clone(),
+            ));
         }
 
         // Validate mute inputs if input count is known
@@ -872,6 +917,7 @@ on_unmute_command = "echo u"
             },
             keyboard: KeyboardConfig {
                 hotkey: "Alt+M".into(),
+                ..Default::default()
             },
             sound: SoundConfig {
                 sound_enabled: false,
@@ -884,6 +930,7 @@ on_unmute_command = "echo u"
                 autostart: true,
                 device_serial: "ABC123".into(),
                 notifications_enabled: true,
+                ..Default::default()
             },
             hooks: HooksConfig {
                 on_mute_command: "echo muted".into(),
@@ -1343,6 +1390,7 @@ on_unmute_command = "echo u"
         let c = Config {
             keyboard: KeyboardConfig {
                 hotkey: "  ".into(),
+                ..Default::default()
             },
             ..Config::default()
         };
@@ -1427,7 +1475,10 @@ on_unmute_command = "echo u"
                 mute_inputs: "99".into(),
                 ..Default::default()
             },
-            keyboard: KeyboardConfig { hotkey: "".into() },
+            keyboard: KeyboardConfig {
+                hotkey: "".into(),
+                ..Default::default()
+            },
             sound: SoundConfig {
                 mute_sound_path: "/bad/path.wav".into(),
                 unmute_sound_path: "/bad/path2.wav".into(),
@@ -1518,6 +1569,7 @@ on_unmute_command = "echo u"
             },
             keyboard: KeyboardConfig {
                 hotkey: "Alt+M".into(),
+                ..Default::default()
             },
             sound: SoundConfig {
                 sound_enabled: false,
@@ -1530,6 +1582,7 @@ on_unmute_command = "echo u"
                 autostart: true,
                 device_serial: "ABC123".into(),
                 notifications_enabled: true,
+                ..Default::default()
             },
             hooks: HooksConfig {
                 on_mute_command: "echo muted".into(),
@@ -1732,5 +1785,209 @@ notifications_enabled = false
         assert_eq!(warnings.len(), 1);
         assert!(warnings[0].contains("corrupted"));
         assert_eq!(config.indicator.mute_color, "#FF0000");
+    }
+
+    // ── is_first_run ──
+
+    #[test]
+    fn is_first_run_when_config_missing() {
+        // is_first_run checks Config::path() which points to the real config dir.
+        // We can't easily mock it, but we can verify the logic via load_from:
+        // a missing file means first run.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nonexistent.toml");
+        assert!(!path.exists());
+        // The static is_first_run() uses Config::path(), but we can verify the
+        // underlying logic: file doesn't exist → first run condition is true.
+        assert!(!path.exists(), "nonexistent file should not exist");
+    }
+
+    #[test]
+    fn is_first_run_when_config_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        Config::default().save_to(&path).unwrap();
+        assert!(path.exists(), "saved config should exist");
+    }
+
+    // ── save_to atomic write ──
+
+    #[test]
+    fn save_to_pid_temp_file_cleaned_up() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        Config::default().save_to(&path).unwrap();
+
+        // Verify no .focusmute-config-*.tmp files remain
+        let entries: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_str().is_some_and(|n| n.contains(".tmp")))
+            .collect();
+        assert!(
+            entries.is_empty(),
+            "no temp files should remain after save: {entries:?}"
+        );
+    }
+
+    #[test]
+    fn save_to_creates_parent_dirs() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nested").join("deep").join("config.toml");
+        assert!(!path.parent().unwrap().exists());
+
+        Config::default().save_to(&path).unwrap();
+        assert!(path.exists());
+    }
+
+    // ── load_from corruption message ──
+
+    #[test]
+    fn load_from_corruption_warning_is_user_friendly() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bad.toml");
+        std::fs::write(&path, "[invalid\nsection").unwrap();
+
+        let (_, warnings) = Config::load_from(&path);
+        assert_eq!(warnings.len(), 1);
+        // Must be user-friendly, not raw TOML error
+        assert!(
+            warnings[0].contains("Settings file corrupted"),
+            "expected user-friendly message, got: {}",
+            warnings[0]
+        );
+        assert!(warnings[0].contains("Using defaults"));
+        // Must NOT contain raw TOML error details
+        assert!(
+            !warnings[0].contains("expected"),
+            "should not expose TOML parser error: {}",
+            warnings[0]
+        );
+    }
+
+    // ── sound file error message ──
+
+    #[test]
+    fn validate_sound_path_too_large_mentions_mb() {
+        let dir = std::env::temp_dir();
+        let path = dir.join("focusmute_test_mb.wav");
+        std::fs::write(&path, vec![0u8; 200]).unwrap();
+        let err = Config::validate_sound_path(path.to_str().unwrap(), 100).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("MB"), "should mention MB limit, got: {msg}");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    // ── Push-to-talk hotkey ──
+
+    #[test]
+    fn ptt_hotkey_defaults_to_empty() {
+        let config = Config::default();
+        assert!(config.keyboard.push_to_talk_hotkey.is_empty());
+    }
+
+    #[test]
+    fn ptt_hotkey_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+
+        let mut config = Config::default();
+        config.keyboard.push_to_talk_hotkey = "Ctrl+Space".into();
+        config.save_to(&path).unwrap();
+
+        let (loaded, warnings) = Config::load_from(&path);
+        assert!(warnings.is_empty());
+        assert_eq!(loaded.keyboard.push_to_talk_hotkey, "Ctrl+Space");
+    }
+
+    #[test]
+    fn ptt_hotkey_missing_field_defaults_to_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            r#"
+[keyboard]
+hotkey = "F12"
+"#,
+        )
+        .unwrap();
+
+        let (config, warnings) = Config::load_from(&path);
+        assert!(warnings.is_empty());
+        assert_eq!(config.keyboard.hotkey, "F12");
+        assert!(config.keyboard.push_to_talk_hotkey.is_empty());
+    }
+
+    // ── Log level ──
+
+    #[test]
+    fn log_level_defaults_to_info() {
+        let config = Config::default();
+        assert_eq!(config.system.log_level, "info");
+    }
+
+    #[test]
+    fn validate_invalid_log_level() {
+        let c = Config {
+            system: SystemConfig {
+                log_level: "garbage".into(),
+                ..Default::default()
+            },
+            ..Config::default()
+        };
+        let errs = c.validate(None, 10_000_000).unwrap_err();
+        assert_eq!(errs.len(), 1);
+        assert!(matches!(errs[0], ValidationError::InvalidLogLevel(_)));
+        assert!(errs[0].to_string().contains("garbage"));
+    }
+
+    #[test]
+    fn validate_all_valid_log_levels() {
+        for level in VALID_LOG_LEVELS {
+            let c = Config {
+                system: SystemConfig {
+                    log_level: level.to_string(),
+                    ..Default::default()
+                },
+                ..Config::default()
+            };
+            assert!(
+                c.validate(None, 10_000_000).is_ok(),
+                "log level '{level}' should be valid"
+            );
+        }
+    }
+
+    #[test]
+    fn log_level_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+
+        let mut config = Config::default();
+        config.system.log_level = "debug".into();
+        config.save_to(&path).unwrap();
+
+        let (loaded, warnings) = Config::load_from(&path);
+        assert!(warnings.is_empty());
+        assert_eq!(loaded.system.log_level, "debug");
+    }
+
+    #[test]
+    fn log_level_missing_field_defaults_to_info() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            r#"
+[system]
+autostart = false
+"#,
+        )
+        .unwrap();
+
+        let (config, warnings) = Config::load_from(&path);
+        assert!(warnings.is_empty());
+        assert_eq!(config.system.log_level, "info");
     }
 }

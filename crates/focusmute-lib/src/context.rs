@@ -31,8 +31,11 @@ impl DeviceContext {
         let profile = models::detect_model(device.info().model());
 
         let schema = if force_schema || profile.is_none() {
-            schema::extract_or_cached(device).ok()
+            schema::extract_or_cached(device)
+                .inspect_err(|e| log::warn!("[context] schema extraction failed: {e}"))
+                .ok()
         } else {
+            log::debug!("[context] skipping schema extraction (hardcoded profile exists)");
             None
         };
 
@@ -46,9 +49,11 @@ impl DeviceContext {
         };
 
         let predicted = if profile.is_none() {
-            schema
-                .as_ref()
-                .and_then(|sc| layout::predict_layout(sc).ok())
+            schema.as_ref().and_then(|sc| {
+                layout::predict_layout(sc)
+                    .inspect_err(|e| log::debug!("[context] layout prediction failed: {e}"))
+                    .ok()
+            })
         } else {
             None
         };
@@ -126,5 +131,32 @@ mod tests {
         let dev = mock_with_name("Unknown Device-00031337");
         let err = DeviceContext::resolve(&dev, false);
         assert!(err.is_err(), "unknown device with no schema should be Err");
+    }
+
+    #[test]
+    fn known_model_force_schema_fails_gracefully() {
+        // When schema extraction fails on a known model with force_schema,
+        // the context should still resolve with the hardcoded profile and
+        // default offsets (schema = None).
+        let dev = mock_with_name("Scarlett 2i2 4th Gen-00031337");
+        let ctx = DeviceContext::resolve(&dev, true).unwrap();
+        assert!(ctx.profile.is_some());
+        assert!(
+            ctx.schema.is_none(),
+            "mock device can't provide schema data — should be None"
+        );
+        assert_eq!(ctx.input_count(), Some(2));
+    }
+
+    #[test]
+    fn default_offsets_used_when_schema_unavailable() {
+        let dev = mock_with_name("Scarlett 2i2 4th Gen-00031337");
+        let ctx = DeviceContext::resolve(&dev, false).unwrap();
+        // With no schema, offsets should be defaults (compare key fields)
+        let defaults = DeviceOffsets::default();
+        assert_eq!(
+            ctx.offsets.enable_direct_led, defaults.enable_direct_led,
+            "enable_direct_led offset should match default"
+        );
     }
 }

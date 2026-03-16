@@ -11,7 +11,7 @@ use focusmute_lib::audio::MuteMonitor;
 use focusmute_lib::config::Config;
 use focusmute_lib::device::{ScarlettDevice, open_device_by_serial};
 
-use global_hotkey::GlobalHotKeyEvent;
+use global_hotkey::{GlobalHotKeyEvent, HotKeyState};
 use muda::MenuEvent;
 
 use super::state::{self, Msg, TrayResources, TrayState};
@@ -72,9 +72,14 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
         log::info!("[config] {}", config_path.display());
     }
     log::info!(
-        "[focusmute] v{} starting (hotkey={}, inputs={}, color={}, sound={}, notifications={})",
+        "[focusmute] v{} starting (hotkey={}, ptt={}, inputs={}, color={}, sound={}, notifications={}, log={})",
         env!("CARGO_PKG_VERSION"),
         config.keyboard.hotkey,
+        if config.keyboard.push_to_talk_hotkey.is_empty() {
+            "off"
+        } else {
+            &config.keyboard.push_to_talk_hotkey
+        },
         config.indicator.mute_inputs,
         config.indicator.mute_color,
         if config.sound.sound_enabled {
@@ -87,6 +92,7 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
         } else {
             "off"
         },
+        config.system.log_level,
     );
     if !config.hooks.on_mute_command.trim().is_empty()
         || !config.hooks.on_unmute_command.trim().is_empty()
@@ -193,6 +199,8 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
     let menu_rx = MenuEvent::receiver();
     let hotkey_rx = GlobalHotKeyEvent::receiver();
     let mut poll_thread_dead = false;
+    let mut ptt_active = false;
+    let mut ptt_noop_logged = false;
 
     loop {
         if !RUNNING.load(Ordering::SeqCst) {
@@ -287,11 +295,43 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
 
         // 5. Hotkey events
         while let Ok(event) = hotkey_rx.try_recv() {
-            if event.id == resources.hotkey.id
-                && let Some(ref m) = main_monitor
-                && let Err(e) = m.set_muted(!state.indicator.is_muted())
-            {
-                log::warn!("[mute] failed to toggle mute: {e}");
+            let Some(ref m) = main_monitor else {
+                continue;
+            };
+            if event.id == resources.hotkey.toggle_id {
+                // Toggle hotkey: act on press only
+                if event.state != HotKeyState::Pressed {
+                    continue;
+                }
+                ptt_active = false;
+                ptt_noop_logged = false;
+                if let Err(e) = m.set_muted(!state.indicator.is_muted()) {
+                    log::warn!("[mute] failed to set mute state: {e}");
+                }
+            } else if resources.hotkey.ptt_id.is_some_and(|id| event.id == id) {
+                // PTT hotkey: press = unmute (if muted), release = re-mute (if PTT activated)
+                match event.state {
+                    HotKeyState::Pressed => {
+                        if state.indicator.is_muted() {
+                            ptt_active = true;
+                            ptt_noop_logged = false;
+                            if let Err(e) = m.set_muted(false) {
+                                log::warn!("[ptt] failed to unmute: {e}");
+                            }
+                        } else if !ptt_noop_logged {
+                            ptt_noop_logged = true;
+                            log::debug!("[ptt] already unmuted, ignoring press");
+                        }
+                    }
+                    HotKeyState::Released => {
+                        if ptt_active {
+                            ptt_active = false;
+                            if let Err(e) = m.set_muted(true) {
+                                log::warn!("[ptt] failed to re-mute: {e}");
+                            }
+                        }
+                    }
+                }
             }
         }
 

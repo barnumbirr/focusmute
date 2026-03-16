@@ -40,6 +40,9 @@ struct DevBroadcastDeviceInterface {
 }
 
 /// Window procedure for the hidden hotplug-notification window.
+///
+/// SAFETY: Called by the Windows message loop with valid parameters.
+/// Only touches a static `AtomicBool` (lock-free, no aliasing concerns).
 unsafe extern "system" fn device_wndproc(
     hwnd: HWND,
     msg: u32,

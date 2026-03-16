@@ -44,3 +44,23 @@ pub(super) fn cmd_set_mute(action: MuteAction) -> Result<()> {
     println!("Microphone: {}", if target { "MUTED" } else { "UNMUTED" });
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mute_action_to_bool() {
+        let mute_target = match MuteAction::Mute {
+            MuteAction::Mute => true,
+            MuteAction::Unmute => false,
+        };
+        assert!(mute_target);
+
+        let unmute_target = match MuteAction::Unmute {
+            MuteAction::Mute => true,
+            MuteAction::Unmute => false,
+        };
+        assert!(!unmute_target);
+    }
+}

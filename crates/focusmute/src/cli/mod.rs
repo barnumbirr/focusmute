@@ -641,6 +641,62 @@ mod command_tests {
         assert!(result.is_ok());
     }
 
+    #[test]
+    fn load_config_nonexistent_returns_defaults() {
+        let path = std::path::Path::new("/tmp/focusmute_nonexistent_config_test.toml");
+        let config = load_config(Some(path));
+        assert_eq!(config.indicator.mute_color, "#FF0000");
+        assert_eq!(config.keyboard.hotkey, "Ctrl+Shift+M");
+    }
+
+    #[test]
+    fn load_config_custom_path_with_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut config = Config::default();
+        config.indicator.mute_color = "#00FF00".into();
+        config.save_to(&path).unwrap();
+
+        let loaded = load_config(Some(&path));
+        assert_eq!(loaded.indicator.mute_color, "#00FF00");
+    }
+
+    #[test]
+    fn run_devices_succeeds() {
+        let result = run(Command::Devices, false, None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn run_devices_json_succeeds() {
+        let result = run(Command::Devices, true, None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn run_status_succeeds() {
+        let result = run(Command::Status, false, None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn run_status_json_succeeds() {
+        let result = run(Command::Status, true, None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn run_config_succeeds() {
+        let result = run(Command::Config { edit: false }, false, None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn run_config_json_succeeds() {
+        let result = run(Command::Config { edit: false }, true, None);
+        assert!(result.is_ok());
+    }
+
     /// Editor tests consolidated into one #[test] to avoid env var races.
     /// VISUAL/EDITOR are process-global; parallel tests would clobber each other.
     /// Skipped on Windows target: relies on Unix `true`/`false` commands.

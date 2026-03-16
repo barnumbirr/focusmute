@@ -213,3 +213,52 @@ pub(super) fn cmd_monitor(
     monitor_teardown(&mctx);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn monitor_ctx_starts_with_defaults() {
+        let config = Config::default();
+        let mute_color = led::mute_color_or_default(&config);
+        let strategy = led::MuteStrategy {
+            input_indices: vec![0, 1],
+            number_leds: vec![0, 1],
+            mute_colors: vec![mute_color, mute_color],
+            selected_color: 0,
+            unselected_color: 0,
+        };
+        let indicator = MuteIndicator::new(2, false, mute_color, strategy);
+        let ctx = MonitorCtx {
+            device: None,
+            indicator,
+            mute_color,
+            reconnect: ReconnectState::with_defaults(),
+            device_serial: String::new(),
+            config,
+        };
+        assert!(!ctx.indicator.is_muted());
+        assert!(ctx.device.is_none());
+    }
+
+    #[test]
+    fn monitor_ctx_hook_overrides_apply() {
+        let mut config = Config::default();
+        assert!(config.hooks.on_mute_command.is_empty());
+        // Simulate --on-mute override (same logic as cmd_monitor)
+        let on_mute = Some("echo muted");
+        if let Some(cmd) = on_mute {
+            config.hooks.on_mute_command = cmd.to_string();
+        }
+        assert_eq!(config.hooks.on_mute_command, "echo muted");
+    }
+
+    #[test]
+    fn mute_color_or_default_uses_red() {
+        let config = Config::default();
+        let color = led::mute_color_or_default(&config);
+        // Default color is #FF0000 → 0xFF000000 in device format
+        assert_eq!(color, 0xFF000000);
+    }
+}

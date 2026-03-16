@@ -301,11 +301,21 @@ pub fn cache_path() -> Option<PathBuf> {
 
 /// Save SchemaConstants to a specific path. Testable without relying on platform config dirs.
 pub fn save_cache_to(path: &std::path::Path, constants: &SchemaConstants) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
+    let dir = path.parent().unwrap_or(std::path::Path::new("."));
+    std::fs::create_dir_all(dir)?;
     let json = serde_json::to_string_pretty(constants).map_err(std::io::Error::other)?;
-    std::fs::write(path, json)
+    // Atomic write: temp file in same dir + rename (same pattern as Config::save_to).
+    let tmp = dir.join(format!(".schema-cache-{}.tmp", std::process::id()));
+    std::fs::write(&tmp, &json)?;
+    match std::fs::rename(&tmp, path) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            // Rename can fail across filesystems; fall back to direct write + cleanup
+            let result = std::fs::write(path, &json);
+            let _ = std::fs::remove_file(&tmp);
+            result
+        }
+    }
 }
 
 /// Save SchemaConstants to cache file.

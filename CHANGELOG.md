@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-03-16
+
+### Added
+
+- Push-to-talk hotkey — independent `push_to_talk_hotkey` config field (hold to unmute, release to re-mute), works simultaneously with the toggle hotkey; PTT is a no-op when already unmuted
+- Push-to-talk hotkey field in settings dialog with validation (syntax check, duplicate detection)
+- Configurable log level in Settings > System (error, warn, info, debug, trace); takes effect on next launch
+
+### Changed
+
+- `get_descriptor` uses `checked_add(8)` to guard against integer overflow on both Windows and Linux
+- Schema cache writes are now atomic (temp file + rename), matching the config save pattern
+- Sound samples stored in `Arc<Vec<f32>>` for cheap sharing (was `Vec<i16>`)
+- Silent `.ok()` error paths now log warnings (schema extraction, layout prediction, per-input color parsing)
+- `// SAFETY:` comments on all unsafe blocks (ctrl_handler, device_wndproc, dark mode transmutes, console APIs)
+- `SettingsChanges` struct replaces tuple return from `handle_settings_result`
+
+### Infrastructure
+
+- rodio 0.20 → 0.22 (Sink→Player, OutputStream→MixerDeviceSink, i16→f32 samples, NonZero types)
+- egui/eframe 0.31 → 0.33
+- tray-icon 0.19 → 0.21, muda 0.15 → 0.17, global-hotkey 0.6 → 0.7
+- windows 0.61 → 0.62, rfd 0.15 → 0.17
+
 ## [0.7.4] - 2026-03-14
 
 ### Added

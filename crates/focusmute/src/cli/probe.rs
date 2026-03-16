@@ -206,3 +206,36 @@ pub(super) fn cmd_probe(dump_schema: bool) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn print_manual_template_without_schema() {
+        // Should not panic — just prints to stdout
+        print_manual_template("Scarlett Solo 4th Gen", None);
+    }
+
+    #[test]
+    fn print_manual_template_with_schema() {
+        let sc = schema::SchemaConstants {
+            product_name: "Scarlett Solo 4th Gen".into(),
+            max_leds: 20,
+            max_inputs: 1,
+            max_outputs: 2,
+            gradient_count: 0,
+            gradient_offset: 0,
+            gradient_notify: 0,
+            direct_led_count: 20,
+            direct_led_offset: 92,
+            metering_segments: 0,
+            input_controls: vec![],
+            app_space_features: vec![],
+            firmware_version: String::new(),
+            schema_format_version: 0,
+        };
+        // Should not panic
+        print_manual_template("Scarlett Solo 4th Gen", Some(&sc));
+    }
+}

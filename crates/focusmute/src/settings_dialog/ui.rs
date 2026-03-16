@@ -23,6 +23,7 @@ pub struct SettingsApp {
     color_dirty: ColorDirty,
 
     hotkey: String,
+    ptt_hotkey: String,
 
     mute_inputs_index: usize,
     mute_inputs_items: Vec<String>,
@@ -33,6 +34,7 @@ pub struct SettingsApp {
     unmute_sound_volume: f32,
     autostart: bool,
     notifications_enabled: bool,
+    log_level: String,
 
     mute_sound_path: String,
     unmute_sound_path: String,
@@ -88,6 +90,7 @@ impl SettingsApp {
             color_dirty: ColorDirty::Neither,
 
             hotkey: config.keyboard.hotkey.clone(),
+            ptt_hotkey: config.keyboard.push_to_talk_hotkey.clone(),
 
             mute_inputs_index,
             mute_inputs_items,
@@ -98,6 +101,7 @@ impl SettingsApp {
             unmute_sound_volume: config.sound.unmute_sound_volume,
             autostart: config.system.autostart,
             notifications_enabled: config.system.notifications_enabled,
+            log_level: config.system.log_level.clone(),
 
             mute_sound_path: config.sound.mute_sound_path.clone(),
             unmute_sound_path: config.sound.unmute_sound_path.clone(),
@@ -126,11 +130,13 @@ impl SettingsApp {
             color_text: &self.color_text,
             color_rgb: self.color_rgb,
             hotkey: &self.hotkey,
+            ptt_hotkey: &self.ptt_hotkey,
             sound_enabled: self.sound_enabled,
             mute_sound_volume: self.mute_sound_volume,
             unmute_sound_volume: self.unmute_sound_volume,
             autostart: self.autostart,
             notifications_enabled: self.notifications_enabled,
+            log_level: &self.log_level,
             mute_inputs_index: self.mute_inputs_index,
             input_count: self.input_count,
             mute_sound_path: &self.mute_sound_path,
@@ -160,12 +166,14 @@ impl SettingsApp {
             color_text: self.color_text.clone(),
             color_rgb: self.color_rgb,
             hotkey: self.hotkey.clone(),
+            ptt_hotkey: self.ptt_hotkey.clone(),
             mute_inputs_index: self.mute_inputs_index,
             sound_enabled: self.sound_enabled,
             mute_sound_volume: self.mute_sound_volume,
             unmute_sound_volume: self.unmute_sound_volume,
             autostart: self.autostart,
             notifications_enabled: self.notifications_enabled,
+            log_level: self.log_level.clone(),
             mute_sound_path: self.mute_sound_path.clone(),
             unmute_sound_path: self.unmute_sound_path.clone(),
             on_mute_command: self.on_mute_command.clone(),
@@ -180,12 +188,14 @@ struct FormSnapshot {
     color_text: String,
     color_rgb: [f32; 3],
     hotkey: String,
+    ptt_hotkey: String,
     mute_inputs_index: usize,
     sound_enabled: bool,
     mute_sound_volume: f32,
     unmute_sound_volume: f32,
     autostart: bool,
     notifications_enabled: bool,
+    log_level: String,
     mute_sound_path: String,
     unmute_sound_path: String,
     on_mute_command: String,
@@ -268,6 +278,14 @@ impl eframe::App for SettingsApp {
                                 .hint_text("e.g. Ctrl+Shift+M"),
                         );
                         ui.end_row();
+
+                        ui.label("Push-to-talk");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.ptt_hotkey)
+                                .desired_width(text_width)
+                                .hint_text("e.g. Ctrl+Space (empty = off)"),
+                        );
+                        ui.end_row();
                     });
             });
 
@@ -277,7 +295,7 @@ impl eframe::App for SettingsApp {
                 ui.add_space(4.0);
 
                 // Measure "Browse..." text width so Play buttons can match.
-                let browse_text_width = ui.fonts(|f| {
+                let browse_text_width = ui.fonts_mut(|f| {
                     f.layout_no_wrap(
                         "Browse...".into(),
                         egui::TextStyle::Button.resolve(ui.style()),
@@ -357,6 +375,27 @@ impl eframe::App for SettingsApp {
                 #[cfg(not(windows))]
                 ui.checkbox(&mut self.autostart, "Start with System");
                 ui.checkbox(&mut self.notifications_enabled, "Desktop notifications");
+                ui.add_space(4.0);
+                egui::Grid::new("system_grid")
+                    .num_columns(2)
+                    .min_col_width(80.0)
+                    .spacing([12.0, 8.0])
+                    .show(ui, |ui| {
+                        ui.label("Log level")
+                            .on_hover_text("Changes take effect on next launch");
+                        egui::ComboBox::from_id_salt("log_level_combo")
+                            .selected_text(&self.log_level)
+                            .show_ui(ui, |ui| {
+                                for &level in focusmute_lib::config::VALID_LOG_LEVELS {
+                                    ui.selectable_value(
+                                        &mut self.log_level,
+                                        level.to_string(),
+                                        level,
+                                    );
+                                }
+                            });
+                        ui.end_row();
+                    });
             });
 
             // ── Advanced section (collapsible, collapsed by default) ──
@@ -510,11 +549,13 @@ pub(crate) struct ValidateParams<'a> {
     pub color_text: &'a str,
     pub color_rgb: [f32; 3],
     pub hotkey: &'a str,
+    pub ptt_hotkey: &'a str,
     pub sound_enabled: bool,
     pub mute_sound_volume: f32,
     pub unmute_sound_volume: f32,
     pub autostart: bool,
     pub notifications_enabled: bool,
+    pub log_level: &'a str,
     pub mute_inputs_index: usize,
     pub input_count: usize,
     pub mute_sound_path: &'a str,
@@ -546,6 +587,7 @@ pub(crate) fn build_and_validate_config(p: &ValidateParams<'_>) -> Result<Config
         },
         keyboard: focusmute_lib::config::KeyboardConfig {
             hotkey: p.hotkey.to_string(),
+            push_to_talk_hotkey: p.ptt_hotkey.trim().to_string(),
         },
         sound: focusmute_lib::config::SoundConfig {
             sound_enabled: p.sound_enabled,
@@ -558,6 +600,7 @@ pub(crate) fn build_and_validate_config(p: &ValidateParams<'_>) -> Result<Config
             autostart: p.autostart,
             device_serial: p.original.system.device_serial.clone(),
             notifications_enabled: p.notifications_enabled,
+            log_level: p.log_level.to_string(),
         },
         hooks: focusmute_lib::config::HooksConfig {
             on_mute_command: p.on_mute_command.to_string(),
@@ -581,8 +624,32 @@ pub(crate) fn build_and_validate_config(p: &ValidateParams<'_>) -> Result<Config
 
     // Validate hotkey syntax (global-hotkey crate parsing)
     let hotkey_str = p.hotkey.trim();
-    if !hotkey_str.is_empty() && hotkey_str.parse::<global_hotkey::hotkey::HotKey>().is_err() {
+    let parsed_toggle = hotkey_str.parse::<global_hotkey::hotkey::HotKey>();
+    if !hotkey_str.is_empty() && parsed_toggle.is_err() {
         errors.push("Invalid hotkey. Examples: Ctrl+Shift+M, Alt+F1".to_string());
+    }
+
+    // Validate PTT hotkey syntax (empty = disabled, which is fine)
+    let ptt_str = p.ptt_hotkey.trim();
+    if !ptt_str.is_empty() {
+        match ptt_str.parse::<global_hotkey::hotkey::HotKey>() {
+            Err(_) => {
+                errors
+                    .push("Invalid push-to-talk hotkey. Examples: Ctrl+Space, Alt+F2".to_string());
+            }
+            Ok(parsed_ptt) => {
+                // Compare parsed hotkey IDs, not strings — catches reordered modifiers
+                // like "Ctrl+Shift+M" vs "Shift+Ctrl+M".
+                if parsed_toggle
+                    .as_ref()
+                    .is_ok_and(|t| t.id() == parsed_ptt.id())
+                {
+                    errors.push(
+                        "Push-to-talk hotkey must be different from the toggle hotkey.".to_string(),
+                    );
+                }
+            }
+        }
     }
 
     if errors.is_empty() {
@@ -662,11 +729,13 @@ mod tests {
             color_text: "#FF0000",
             color_rgb: [1.0, 0.0, 0.0],
             hotkey: "Ctrl+Shift+M",
+            ptt_hotkey: "",
             sound_enabled: true,
             mute_sound_volume: 1.0,
             unmute_sound_volume: 1.0,
             autostart: false,
             notifications_enabled: false,
+            log_level: "info",
             mute_inputs_index: 0,
             input_count: 2,
             mute_sound_path: "",
@@ -929,5 +998,118 @@ mod tests {
         })
         .expect("valid text color should succeed");
         assert_eq!(config.indicator.mute_color, "#00FF00");
+    }
+
+    // ── v0.7.4: user-friendly error messages ──
+
+    #[test]
+    fn build_invalid_hotkey_shows_examples() {
+        let orig = Config::default();
+        let result = build_and_validate_config(&ValidateParams {
+            hotkey: "Not+A+Real+Key",
+            ..default_test_params(&orig)
+        });
+        let errs = result.unwrap_err();
+        let hotkey_err = errs.iter().find(|e| e.contains("hotkey")).unwrap();
+        assert!(
+            hotkey_err.contains("Examples"),
+            "should show examples, got: {hotkey_err}"
+        );
+        assert!(
+            hotkey_err.contains("Ctrl+Shift+M"),
+            "should include Ctrl+Shift+M example, got: {hotkey_err}"
+        );
+    }
+
+    #[test]
+    fn build_valid_hotkey_no_error() {
+        for hk in &["Ctrl+Shift+M", "Alt+F1", "F12", "Ctrl+M"] {
+            let orig = Config::default();
+            let result = build_and_validate_config(&ValidateParams {
+                hotkey: hk,
+                ..default_test_params(&orig)
+            });
+            assert!(result.is_ok(), "hotkey '{hk}' should be valid");
+        }
+    }
+
+    #[test]
+    fn build_ptt_hotkey_preserved_in_config() {
+        let orig = Config::default();
+        let config = build_and_validate_config(&ValidateParams {
+            ptt_hotkey: "Ctrl+Space",
+            ..default_test_params(&orig)
+        })
+        .expect("should be Ok");
+        assert_eq!(config.keyboard.push_to_talk_hotkey, "Ctrl+Space");
+    }
+
+    #[test]
+    fn build_empty_ptt_hotkey_means_disabled() {
+        let orig = Config::default();
+        let config = build_and_validate_config(&ValidateParams {
+            ptt_hotkey: "",
+            ..default_test_params(&orig)
+        })
+        .expect("should be Ok");
+        assert!(config.keyboard.push_to_talk_hotkey.is_empty());
+    }
+
+    #[test]
+    fn build_invalid_ptt_hotkey_returns_err() {
+        let orig = Config::default();
+        let result = build_and_validate_config(&ValidateParams {
+            ptt_hotkey: "Not+A+Real+Key",
+            ..default_test_params(&orig)
+        });
+        assert!(result.is_err());
+        let errs = result.unwrap_err();
+        assert!(
+            errs.iter().any(|e| e.contains("push-to-talk")),
+            "expected PTT error, got: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn build_ptt_same_as_toggle_returns_err() {
+        let orig = Config::default();
+        let result = build_and_validate_config(&ValidateParams {
+            hotkey: "Ctrl+Shift+M",
+            ptt_hotkey: "Ctrl+Shift+M",
+            ..default_test_params(&orig)
+        });
+        assert!(result.is_err());
+        let errs = result.unwrap_err();
+        assert!(
+            errs.iter().any(|e| e.contains("different")),
+            "expected duplicate hotkey error, got: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn build_ptt_same_as_toggle_reordered_modifiers_returns_err() {
+        let orig = Config::default();
+        let result = build_and_validate_config(&ValidateParams {
+            hotkey: "Ctrl+Shift+M",
+            ptt_hotkey: "Shift+Ctrl+M",
+            ..default_test_params(&orig)
+        });
+        assert!(result.is_err());
+        let errs = result.unwrap_err();
+        assert!(
+            errs.iter().any(|e| e.contains("different")),
+            "reordered modifiers should still detect duplicate, got: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn build_ptt_whitespace_treated_as_disabled() {
+        let orig = Config::default();
+        let config = build_and_validate_config(&ValidateParams {
+            ptt_hotkey: "   ",
+            ..default_test_params(&orig)
+        })
+        .expect("should be Ok");
+        assert!(config.keyboard.push_to_talk_hotkey.is_empty());
     }
 }

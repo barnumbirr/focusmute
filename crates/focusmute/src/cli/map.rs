@@ -200,3 +200,47 @@ pub(super) fn cmd_map(
     println!("Done.");
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hardcoded_labels_known_model() {
+        let labels = hardcoded_labels("Scarlett 2i2 4th Gen");
+        assert!(labels.is_some(), "2i2 should have hardcoded labels");
+        let labels = labels.unwrap();
+        assert!(!labels.is_empty());
+        // 2i2 has 40 LEDs
+        assert_eq!(labels.len(), 40);
+    }
+
+    #[test]
+    fn hardcoded_labels_unknown_model() {
+        let labels = hardcoded_labels("Unknown Device XYZ");
+        assert!(labels.is_none());
+    }
+
+    #[test]
+    fn hardcoded_labels_case_sensitive() {
+        // Model detection is case-insensitive
+        let labels = hardcoded_labels("scarlett 2i2 4th gen");
+        assert!(labels.is_some());
+    }
+
+    #[test]
+    fn grayscale_color_from_brightness() {
+        // Verify the color construction: brightness → grayscale in device format
+        let v: u32 = 128;
+        let color: u32 = (v << 24) | (v << 16) | (v << 8);
+        assert_eq!(color, 0x80808000);
+
+        let v: u32 = 255;
+        let color: u32 = (v << 24) | (v << 16) | (v << 8);
+        assert_eq!(color, 0xFFFFFF00);
+
+        let v: u32 = 0;
+        let color: u32 = (v << 24) | (v << 16) | (v << 8);
+        assert_eq!(color, 0x00000000);
+    }
+}

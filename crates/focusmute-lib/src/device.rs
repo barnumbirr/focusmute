@@ -730,10 +730,14 @@ mod windows_impl {
         }
 
         fn get_descriptor(&self, offset: u32, size: u32) -> Result<Vec<u8>> {
+            let resp_size = size
+                .checked_add(8)
+                .ok_or_else(|| DeviceError::TransactFailed("GET_DESCR size overflow".into()))?
+                as usize;
             let mut payload = Vec::with_capacity(8);
             payload.extend_from_slice(&offset.to_le_bytes());
             payload.extend_from_slice(&size.to_le_bytes());
-            let resp = self.transact_impl(CMD_GET_DESCR, &payload, (8 + size) as usize)?;
+            let resp = self.transact_impl(CMD_GET_DESCR, &payload, resp_size)?;
             // Response has 8-byte header, then data
             if resp.len() > 8 {
                 Ok(resp[8..].to_vec())
@@ -1064,6 +1068,10 @@ mod linux_impl {
         fn get_descriptor(&self, offset: u32, size: u32) -> Result<Vec<u8>> {
             let usb_cmd =
                 swroot_to_usb_cmd(CMD_GET_DESCR).expect("CMD_GET_DESCR must have USB mapping");
+            // Validate size won't overflow when adding the 8-byte header.
+            let _ = size
+                .checked_add(8)
+                .ok_or_else(|| DeviceError::TransactFailed("GET_DESCR size overflow".into()))?;
             let mut payload = Vec::with_capacity(8);
             payload.extend_from_slice(&offset.to_le_bytes());
             payload.extend_from_slice(&size.to_le_bytes());
@@ -1635,7 +1643,41 @@ mod tests {
         assert_eq!(info.model(), "");
     }
 
-    // ── enumerate_devices ──
+    // ── FirmwareVersion::is_zero ──
+
+    #[test]
+    fn firmware_is_zero_all_zeroes() {
+        assert!(FirmwareVersion::default().is_zero());
+    }
+
+    #[test]
+    fn firmware_is_zero_nonzero_major() {
+        let v = FirmwareVersion {
+            major: 1,
+            ..Default::default()
+        };
+        assert!(!v.is_zero());
+    }
+
+    #[test]
+    fn firmware_is_zero_nonzero_build_nr() {
+        let v = FirmwareVersion {
+            build_nr: 1,
+            ..Default::default()
+        };
+        assert!(!v.is_zero());
+    }
+
+    #[test]
+    fn firmware_is_zero_all_max_values() {
+        let v = FirmwareVersion {
+            major: u16::MAX,
+            minor: u16::MAX,
+            stage_release: u32::MAX,
+            build_nr: u32::MAX,
+        };
+        assert!(!v.is_zero());
+    }
 
     // ── FirmwareVersion::from_descriptor_bytes ──
 

@@ -48,4 +48,28 @@ mod tests {
         let result = cmd_descriptor_inner(&dev, 100, 16);
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn descriptor_unaligned_size() {
+        // Size not a multiple of 16 — last chunk should be shorter
+        let dev = MockDevice::new();
+        dev.set_descriptor(0, &[0xFF; 50]).unwrap();
+        let result = cmd_descriptor_inner(&dev, 0, 50);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn descriptor_zero_size() {
+        let dev = MockDevice::new();
+        let result = cmd_descriptor_inner(&dev, 0, 0);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn descriptor_large_offset() {
+        let dev = MockDevice::new();
+        dev.set_descriptor(65000, &[0xAA; 8]).unwrap();
+        let result = cmd_descriptor_inner(&dev, 65000, 8);
+        assert!(result.is_ok());
+    }
 }

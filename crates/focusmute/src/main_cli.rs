@@ -37,6 +37,8 @@ struct Args {
 
 // ── Ctrl+C handler ──
 
+/// SAFETY: Called by the Windows console subsystem with a valid control type.
+/// Only touches a static `AtomicBool` (lock-free, no aliasing concerns).
 #[cfg(windows)]
 unsafe extern "system" fn ctrl_handler(_ctrl_type: u32) -> windows::core::BOOL {
     RUNNING.store(false, Ordering::SeqCst);
@@ -54,6 +56,8 @@ fn main() {
 
     // Install Ctrl+C handler
     #[cfg(windows)]
+    // SAFETY: `ctrl_handler` has the correct `extern "system"` signature for
+    // SetConsoleCtrlHandler and only writes to a static AtomicBool.
     unsafe {
         let _ = windows::Win32::System::Console::SetConsoleCtrlHandler(Some(ctrl_handler), true);
     }

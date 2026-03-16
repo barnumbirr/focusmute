@@ -35,3 +35,21 @@ pub(super) fn cmd_devices(json: bool) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cmd_devices_text_succeeds() {
+        // enumerate_devices returns empty on test hosts without hardware
+        let result = cmd_devices(false);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_devices_json_succeeds() {
+        let result = cmd_devices(true);
+        assert!(result.is_ok());
+    }
+}

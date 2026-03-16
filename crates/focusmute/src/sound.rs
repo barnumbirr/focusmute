@@ -4,19 +4,24 @@
 //! needs to clone the sample buffer (no re-parsing on every mute toggle).
 
 use std::io::Cursor;
+use std::num::{NonZeroU16, NonZeroU32};
+use std::sync::Arc;
 
 use rodio::buffer::SamplesBuffer;
-use rodio::{Decoder, Sink, Source};
+use rodio::{Decoder, Player, Source};
 
 // Embedded mute/unmute notification sounds (short beep tones).
 pub(crate) const SOUND_MUTED: &[u8] = include_bytes!("../assets/muted.wav");
 pub(crate) const SOUND_UNMUTED: &[u8] = include_bytes!("../assets/unmuted.wav");
 
 /// Pre-decoded sound ready for playback via `SamplesBuffer`.
+///
+/// Samples are wrapped in `Arc` so cloning a `DecodedSound` (e.g. on every
+/// mute toggle) is a cheap ref-count bump instead of copying the sample buffer.
 pub(crate) struct DecodedSound {
-    channels: u16,
-    sample_rate: u32,
-    samples: Vec<i16>,
+    channels: NonZeroU16,
+    sample_rate: NonZeroU32,
+    samples: Arc<Vec<f32>>,
 }
 
 /// Decode raw WAV bytes into a `DecodedSound`.
@@ -24,11 +29,11 @@ fn decode_wav(wav_bytes: &[u8]) -> Option<DecodedSound> {
     let decoder = Decoder::new(Cursor::new(wav_bytes.to_vec())).ok()?;
     let channels = decoder.channels();
     let sample_rate = decoder.sample_rate();
-    let samples: Vec<i16> = decoder.collect();
+    let samples: Vec<f32> = decoder.collect();
     Some(DecodedSound {
         channels,
         sample_rate,
-        samples,
+        samples: Arc::new(samples),
     })
 }
 
@@ -72,34 +77,30 @@ pub(crate) fn load_sound_data(
 
 /// Play a pre-decoded sound, re-acquiring the default audio output each time.
 ///
-/// Re-creating the `OutputStream` + `Sink` on every call ensures playback always
+/// Re-creating the `MixerDeviceSink` + `Player` on every call ensures playback always
 /// targets the current default device. If the device changed since the last call
 /// (headphones plugged in, Bluetooth connected, suspend/resume invalidated the
 /// WASAPI endpoint), stale handles would silently swallow audio. The overhead is
 /// negligible for short notification beeps on infrequent mute toggles.
 ///
-/// The previous stream/sink are replaced, which drops (and stops) any prior stream.
+/// The previous sink/player are replaced, which drops (and stops) any prior stream.
 pub(crate) fn play_sound(
     sound: &DecodedSound,
-    audio_stream: &mut Option<rodio::OutputStream>,
-    sink: &mut Option<Sink>,
+    device_sink: &mut Option<rodio::MixerDeviceSink>,
+    player: &mut Option<Player>,
     volume: f32,
 ) {
-    match rodio::OutputStream::try_default() {
-        Ok((stream, handle)) => match Sink::try_new(&handle) {
-            Ok(new_sink) => {
-                new_sink.set_volume(volume);
-                let source =
-                    SamplesBuffer::new(sound.channels, sound.sample_rate, sound.samples.clone());
-                new_sink.append(source);
-                *audio_stream = Some(stream);
-                *sink = Some(new_sink);
-                log::debug!("[sound] playback started (volume={volume:.0}%)");
-            }
-            Err(e) => {
-                log::warn!("[sound] could not create audio sink: {e}");
-            }
-        },
+    match rodio::DeviceSinkBuilder::open_default_sink() {
+        Ok(mixer) => {
+            let new_player = Player::connect_new(mixer.mixer());
+            new_player.set_volume(volume);
+            let source =
+                SamplesBuffer::new(sound.channels, sound.sample_rate, sound.samples.as_slice());
+            new_player.append(source);
+            *device_sink = Some(mixer);
+            *player = Some(new_player);
+            log::debug!("[sound] playback started (volume={volume:.0}%)");
+        }
         Err(e) => {
             log::warn!("[sound] could not open audio output: {e}");
         }
@@ -122,16 +123,16 @@ mod tests {
     #[test]
     fn decode_builtin_muted_has_valid_metadata() {
         let decoded = decode_wav(SOUND_MUTED).expect("should decode");
-        assert!(decoded.channels > 0);
-        assert!(decoded.sample_rate > 0);
+        assert!(decoded.channels.get() > 0);
+        assert!(decoded.sample_rate.get() > 0);
         assert!(!decoded.samples.is_empty());
     }
 
     #[test]
     fn decode_builtin_unmuted_has_valid_metadata() {
         let decoded = decode_wav(SOUND_UNMUTED).expect("should decode");
-        assert!(decoded.channels > 0);
-        assert!(decoded.sample_rate > 0);
+        assert!(decoded.channels.get() > 0);
+        assert!(decoded.sample_rate.get() > 0);
         assert!(!decoded.samples.is_empty());
     }
 
@@ -153,7 +154,7 @@ mod tests {
     #[test]
     fn load_sound_data_whitespace_path_returns_builtin() {
         let (result, warning) = load_sound_data("   ", SOUND_MUTED);
-        assert!(result.channels > 0);
+        assert!(result.channels.get() > 0);
         assert!(warning.is_none());
     }
 

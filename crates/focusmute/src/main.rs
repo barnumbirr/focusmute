@@ -28,6 +28,9 @@ pub static RUNNING: AtomicBool = AtomicBool::new(true);
 fn has_parent_console() -> bool {
     use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole, FreeConsole};
 
+    // SAFETY: AttachConsole/FreeConsole are standard Win32 console APIs.
+    // AttachConsole probes for a parent console; FreeConsole detaches it.
+    // Both are safe to call from any thread before any console I/O.
     unsafe {
         if AttachConsole(ATTACH_PARENT_PROCESS).is_ok() {
             // We successfully attached — there's a parent console.
@@ -43,11 +46,21 @@ fn has_parent_console() -> bool {
 /// Initialize the tray app logger, directing output to a log file.
 ///
 /// Falls back to stderr if the log file can't be opened.
+/// Reads the configured log level from config; defaults to "info".
 fn init_tray_logger() {
     use focusmute_lib::config::Config;
 
+    let config = Config::load();
+    let level = if focusmute_lib::config::VALID_LOG_LEVELS
+        .contains(&config.system.log_level.to_lowercase().as_str())
+    {
+        &config.system.log_level
+    } else {
+        "info"
+    };
+
     let mut builder =
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"));
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(level));
     builder.format_target(false);
 
     if let Some(log_path) = Config::log_path() {

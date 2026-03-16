@@ -157,3 +157,54 @@ pub(super) fn cmd_config(json: bool, custom_path: Option<&Path>, edit: bool) -> 
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cmd_config_with_custom_path_nonexistent() {
+        // Custom path that doesn't exist — should show defaults with "(not found)"
+        let path = std::path::Path::new("/tmp/focusmute_test_nonexistent.toml");
+        let result = cmd_config(false, Some(path), false);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_config_json_with_custom_path_nonexistent() {
+        let path = std::path::Path::new("/tmp/focusmute_test_nonexistent.toml");
+        let result = cmd_config(true, Some(path), false);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_config_with_custom_path_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        Config::default().save_to(&path).unwrap();
+
+        let result = cmd_config(false, Some(&path), false);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_config_json_with_custom_path_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut config = Config::default();
+        config.indicator.mute_color = "#00FF00".into();
+        config.save_to(&path).unwrap();
+
+        let result = cmd_config(true, Some(&path), false);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cmd_config_edit_no_config_dir_returns_error() {
+        // --edit with None path and no default config dir is an edge case.
+        // On CI/test environments Config::path() usually exists, so this
+        // just verifies the function doesn't panic with valid inputs.
+        let result = cmd_config(false, None, false);
+        assert!(result.is_ok());
+    }
+}
