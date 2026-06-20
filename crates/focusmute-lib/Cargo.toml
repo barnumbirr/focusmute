@@ -12,7 +12,7 @@ rust-version = "1.85"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-toml = "0.8"
+toml = "0.9"
 dirs = "6"
 base64 = "0.22"
 flate2 = "1"
@@ -22,7 +22,7 @@ log = "0.4"
 tempfile = "3"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-nusb = "0.1"
+nusb = "0.2"
 libpulse-binding = "2"
 
 [target.'cfg(windows)'.dependencies]
