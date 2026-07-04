@@ -19,7 +19,7 @@ jobs:
           shared-key: linux
 
       - name: Install Linux dependencies
-        uses: awalsh128/cache-apt-pkgs-action@681749ae568c81c2037cb9185e38b709b261bd2f # v1.6.1
+        uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
         with:
           packages: libpulse-dev pkg-config libasound2-dev libgtk-3-dev libxdo-dev libappindicator3-dev libxkbcommon-dev libegl-dev
 
@@ -30,7 +30,7 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
 
       - name: Audit advisories
-        uses: EmbarkStudios/cargo-deny-action@3fd3802e88374d3fe9159b834c7714ec57d6c979 # v2.0.15
+        uses: EmbarkStudios/cargo-deny-action@bb137d7af7e4fb67e5f82a49c4fce4fad40782fe # v2.0.20
         with:
           command: check advisories
 
