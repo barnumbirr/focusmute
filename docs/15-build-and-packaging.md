@@ -57,7 +57,7 @@ sudo apt-get install gcc-mingw-w64-x86-64
 
 **Linux native prerequisites** (PulseAudio + GTK + tray dependencies):
 ```
-sudo apt-get install libpulse-dev pkg-config libasound2-dev libgtk-3-dev libxdo-dev libappindicator3-dev
+sudo apt-get install libpulse-dev pkg-config libasound2-dev libgtk-3-dev libxdo-dev libappindicator3-dev libssl-dev
 ```
 
 ### Build Outputs
@@ -167,7 +167,7 @@ Triggers on tag push matching `v*` (e.g., `v0.2.0`).
 | `release-linux` | `ubuntu-latest` | Build, `cargo-binstall` → `cargo-deb` → `.deb` + `.tar.gz`. Uploads both |
 | `publish` | `ubuntu-latest` | Downloads all artifacts → creates GitHub Release with auto-generated notes |
 
-Uses `cargo-bins/cargo-binstall@main` to download pre-built `cargo-wix` and `cargo-deb` binaries (faster than compiling from source via `cargo install`).
+Uses `cargo-bins/cargo-binstall` (SHA-pinned) to download pre-built `cargo-wix` and `cargo-deb` binaries (faster than compiling from source via `cargo install`).
 
 **Release process**:
 1. Tag a commit: `git tag v<version> && git push --tags`

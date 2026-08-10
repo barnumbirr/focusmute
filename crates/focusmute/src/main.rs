@@ -17,11 +17,27 @@ mod sound;
 mod tray;
 
 #[cfg(any(windows, target_os = "linux"))]
+use std::sync::OnceLock;
+#[cfg(any(windows, target_os = "linux"))]
 use std::sync::atomic::AtomicBool;
 
 /// Shared shutdown flag — set by tray quit.
 #[cfg(any(windows, target_os = "linux"))]
 pub static RUNNING: AtomicBool = AtomicBool::new(true);
+
+/// Logger handle for runtime log level changes from the settings dialog.
+#[cfg(any(windows, target_os = "linux"))]
+static LOGGER_HANDLE: OnceLock<flexi_logger::LoggerHandle> = OnceLock::new();
+
+/// Change the log level at runtime (called from the settings dialog).
+#[cfg(any(windows, target_os = "linux"))]
+pub fn set_log_level(level: &str) {
+    if let Some(handle) = LOGGER_HANDLE.get() {
+        if let Err(e) = handle.parse_new_spec(level) {
+            log::warn!("[config] could not set log level to '{level}': {e}");
+        }
+    }
+}
 
 /// Check if we were launched from an interactive console (PowerShell, cmd, etc.).
 #[cfg(windows)]
@@ -47,32 +63,55 @@ fn has_parent_console() -> bool {
 ///
 /// Falls back to stderr if the log file can't be opened.
 /// Reads the configured log level from config; defaults to "info".
+/// Stores the logger handle in [`LOGGER_HANDLE`] for runtime level changes.
 fn init_tray_logger() {
+    use flexi_logger::{FileSpec, Logger, WriteMode};
     use focusmute_lib::config::Config;
 
     let config = Config::load();
     let level = if focusmute_lib::config::VALID_LOG_LEVELS
         .contains(&config.system.log_level.to_lowercase().as_str())
     {
-        &config.system.log_level
+        config.system.log_level.as_str()
     } else {
         "info"
     };
 
-    let mut builder =
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(level));
-    builder.format_target(false);
+    let logger =
+        Logger::try_with_str(level).unwrap_or_else(|_| Logger::try_with_str("info").unwrap());
 
-    if let Some(log_path) = Config::log_path() {
+    let logger = if let Some(log_path) = Config::log_path() {
         if let Some(dir) = log_path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        if let Ok(file) = std::fs::File::create(&log_path) {
-            builder.target(env_logger::Target::Pipe(Box::new(file)));
-        }
-    }
+        // FileSpec from the full path: directory + basename + suffix.
+        let file_spec = FileSpec::try_from(log_path).unwrap_or_default();
+        logger.log_to_file(file_spec).write_mode(WriteMode::Direct)
+    } else {
+        logger
+    };
 
-    builder.init();
+    match logger.format(focusmute_log_format).start() {
+        Ok(handle) => {
+            let _ = LOGGER_HANDLE.set(handle);
+        }
+        Err(e) => eprintln!("Failed to initialize logger: {e}"),
+    }
+}
+
+/// Log format: `[timestamp] LEVEL message`
+fn focusmute_log_format(
+    w: &mut dyn std::io::Write,
+    now: &mut flexi_logger::DeferredNow,
+    record: &log::Record,
+) -> std::io::Result<()> {
+    write!(
+        w,
+        "[{}] {:5} {}",
+        now.format(flexi_logger::TS_DASHES_BLANK_COLONS_DOT_BLANK),
+        record.level(),
+        record.args(),
+    )
 }
 
 fn main() {

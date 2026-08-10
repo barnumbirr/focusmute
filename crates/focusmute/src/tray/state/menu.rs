@@ -9,6 +9,19 @@ use super::icon::{icon_disconnected, icon_live, icon_muted};
 use super::{TrayResources, TrayState};
 use crate::sound;
 
+// ── Tray icon helpers ──
+
+/// Update the tray icon and tooltip in one call (both are best-effort).
+pub fn set_tray_mute_state(tray: &tray_icon::TrayIcon, muted: bool) {
+    if muted {
+        tray.set_icon(Some(icon_muted())).ok();
+        tray.set_tooltip(Some("FocusMute — Muted")).ok();
+    } else {
+        tray.set_icon(Some(icon_live())).ok();
+        tray.set_tooltip(Some("FocusMute — Live")).ok();
+    }
+}
+
 // ── Shared menu construction ──
 
 /// All menu items the tray uses, returned from `build_tray_menu`.
@@ -129,23 +142,19 @@ pub fn apply_mute_ui(
     state: &TrayState,
     resources: &mut TrayResources,
     device_connected: bool,
+    suppress_sound: bool,
 ) {
     if !device_connected {
         return;
     }
+    let play_sound = state.config.sound.sound_enabled && !suppress_sound;
     match action {
         MonitorAction::ApplyMute => {
             log::info!("[mute] muted");
-            tray.set_icon(Some(icon_muted())).ok();
-            tray.set_tooltip(Some("FocusMute — Muted")).ok();
+            set_tray_mute_state(tray, true);
             menu.status_item.set_text("Muted");
-            if state.config.sound.sound_enabled {
-                sound::play_sound(
-                    &resources.mute_sound,
-                    &mut resources._device_sink,
-                    &mut resources.player,
-                    state.config.sound.mute_sound_volume,
-                );
+            if play_sound {
+                sound::play_sound(&resources.mute_sound, state.config.sound.mute_sound_volume);
             }
             if state.config.system.notifications_enabled {
                 resources.notifier.show_mute_state("Microphone Muted");
@@ -153,14 +162,11 @@ pub fn apply_mute_ui(
         }
         MonitorAction::ClearMute => {
             log::info!("[mute] unmuted");
-            tray.set_icon(Some(icon_live())).ok();
-            tray.set_tooltip(Some("FocusMute — Live")).ok();
+            set_tray_mute_state(tray, false);
             menu.status_item.set_text("Live");
-            if state.config.sound.sound_enabled {
+            if play_sound {
                 sound::play_sound(
                     &resources.unmute_sound,
-                    &mut resources._device_sink,
-                    &mut resources.player,
                     state.config.sound.unmute_sound_volume,
                 );
             }

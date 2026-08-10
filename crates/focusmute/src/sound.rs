@@ -6,9 +6,18 @@
 use std::io::Cursor;
 use std::num::{NonZeroU16, NonZeroU32};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use rodio::buffer::SamplesBuffer;
 use rodio::{Decoder, Player, Source};
+
+/// Extra wait allowed beyond a sound's nominal duration before concluding
+/// the output stream died mid-play (covers device-open jitter, WASAPI
+/// engine latency, and thread scheduling).
+const DRAIN_TIMEOUT_MARGIN: Duration = Duration::from_millis(500);
+
+/// Poll interval for [`wait_for_drain`].
+const DRAIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 // Embedded mute/unmute notification sounds (short beep tones).
 pub(crate) const SOUND_MUTED: &[u8] = include_bytes!("../assets/muted.wav");
@@ -18,10 +27,39 @@ pub(crate) const SOUND_UNMUTED: &[u8] = include_bytes!("../assets/unmuted.wav");
 ///
 /// Samples are wrapped in `Arc` so cloning a `DecodedSound` (e.g. on every
 /// mute toggle) is a cheap ref-count bump instead of copying the sample buffer.
+#[derive(Clone)]
 pub(crate) struct DecodedSound {
     channels: NonZeroU16,
     sample_rate: NonZeroU32,
     samples: Arc<Vec<f32>>,
+}
+
+impl DecodedSound {
+    /// Nominal playback duration of the decoded samples.
+    fn duration(&self) -> Duration {
+        let frames = self.samples.len() as f64 / f64::from(self.channels.get());
+        Duration::from_secs_f64(frames / f64::from(self.sample_rate.get()))
+    }
+}
+
+/// Wait until `is_empty` reports the player queue drained, or `timeout` elapses.
+///
+/// Returns `true` if playback drained, `false` on timeout. This replaces
+/// `Player::sleep_until_end()`, whose end-signal only fires when the output
+/// stream polls the queued source to exhaustion — if the WASAPI session is
+/// disconnected mid-play (format change, exclusive-mode grab, device
+/// removal), that signal never comes and the wait would block forever while
+/// holding the dead sink. A polled deadline keeps the helper thread's
+/// lifetime bounded either way.
+fn wait_for_drain(is_empty: impl Fn() -> bool, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    while !is_empty() {
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(DRAIN_POLL_INTERVAL);
+    }
+    true
 }
 
 /// Decode raw WAV bytes into a `DecodedSound`.
@@ -75,36 +113,49 @@ pub(crate) fn load_sound_data(
     }
 }
 
-/// Play a pre-decoded sound, re-acquiring the default audio output each time.
+/// Play a pre-decoded sound on a short-lived background thread.
 ///
-/// Re-creating the `MixerDeviceSink` + `Player` on every call ensures playback always
-/// targets the current default device. If the device changed since the last call
-/// (headphones plugged in, Bluetooth connected, suspend/resume invalidated the
-/// WASAPI endpoint), stale handles would silently swallow audio. The overhead is
-/// negligible for short notification beeps on infrequent mute toggles.
+/// The thread opens the default audio sink, plays the sound, waits (bounded
+/// by the sound's duration plus [`DRAIN_TIMEOUT_MARGIN`]) for playback to
+/// drain, then drops the sink — releasing the WASAPI endpoint immediately.
+/// This avoids holding a stream between mute events, which was known to
+/// wedge USB DACs (e.g. Schiit Magni Unity) when other apps (games, DAWs)
+/// later tried to acquire the endpoint.
 ///
-/// The previous sink/player are replaced, which drops (and stops) any prior stream.
-pub(crate) fn play_sound(
-    sound: &DecodedSound,
-    device_sink: &mut Option<rodio::MixerDeviceSink>,
-    player: &mut Option<Player>,
-    volume: f32,
-) {
-    match rodio::DeviceSinkBuilder::open_default_sink() {
-        Ok(mixer) => {
-            let new_player = Player::connect_new(mixer.mixer());
-            new_player.set_volume(volume);
+/// Fire-and-forget: the caller does not wait for playback to finish.
+/// Errors are logged and swallowed — a missed beep is never fatal.
+pub(crate) fn play_sound(sound: &DecodedSound, volume: f32) {
+    let sound = sound.clone();
+    std::thread::Builder::new()
+        .name("sound-play".into())
+        .spawn(move || {
+            let mixer = match rodio::DeviceSinkBuilder::open_default_sink() {
+                Ok(m) => m,
+                Err(e) => {
+                    log::warn!("[sound] could not open audio output: {e}");
+                    return;
+                }
+            };
+            let player = Player::connect_new(mixer.mixer());
+            player.set_volume(volume);
             let source =
                 SamplesBuffer::new(sound.channels, sound.sample_rate, sound.samples.as_slice());
-            new_player.append(source);
-            *device_sink = Some(mixer);
-            *player = Some(new_player);
-            log::debug!("[sound] playback started (volume={volume:.0}%)");
-        }
-        Err(e) => {
-            log::warn!("[sound] could not open audio output: {e}");
-        }
-    }
+            player.append(source);
+            log::debug!("[sound] playback started (volume={:.0}%)", volume * 100.0);
+            // Wait for the beep to drain, then drop `player` and `mixer` —
+            // releasing the WASAPI stream so no other app can be forced to
+            // evict it later. The wait is bounded: a stream lost mid-beep
+            // must not leak this thread.
+            let timeout = sound.duration() + DRAIN_TIMEOUT_MARGIN;
+            if !wait_for_drain(|| player.empty(), timeout) {
+                log::warn!(
+                    "[sound] playback did not drain within {timeout:?} — output stream likely lost"
+                );
+            }
+            drop(player);
+            drop(mixer);
+        })
+        .ok();
 }
 
 #[cfg(test)]
@@ -139,6 +190,52 @@ mod tests {
     #[test]
     fn decode_invalid_wav_returns_none() {
         assert!(decode_wav(b"this is not wav data").is_none());
+    }
+
+    #[test]
+    fn decoded_sound_duration_from_sample_count() {
+        let sound = DecodedSound {
+            channels: NonZeroU16::new(2).unwrap(),
+            sample_rate: NonZeroU32::new(8_000).unwrap(),
+            samples: Arc::new(vec![0.0; 4_000]), // 2000 frames at 8 kHz
+        };
+        assert_eq!(sound.duration(), Duration::from_millis(250));
+    }
+
+    #[test]
+    fn builtin_sound_durations_are_sane() {
+        for bytes in [SOUND_MUTED, SOUND_UNMUTED] {
+            let duration = decode_wav(bytes).unwrap().duration();
+            assert!(
+                duration > Duration::ZERO && duration < Duration::from_secs(5),
+                "unexpected builtin sound duration: {duration:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn wait_for_drain_returns_immediately_when_empty() {
+        let start = Instant::now();
+        assert!(wait_for_drain(|| true, Duration::from_secs(5)));
+        assert!(start.elapsed() < Duration::from_secs(1));
+    }
+
+    #[test]
+    fn wait_for_drain_times_out_when_stream_never_drains() {
+        let timeout = Duration::from_millis(50);
+        let start = Instant::now();
+        assert!(!wait_for_drain(|| false, timeout));
+        assert!(start.elapsed() >= timeout);
+    }
+
+    #[test]
+    fn wait_for_drain_completes_when_queue_empties_later() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let polls = AtomicUsize::new(0);
+        assert!(wait_for_drain(
+            || polls.fetch_add(1, Ordering::SeqCst) >= 3,
+            Duration::from_secs(5),
+        ));
     }
 
     #[test]

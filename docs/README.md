@@ -172,7 +172,7 @@ See [09-led-control-api-discovery.md](09-led-control-api-discovery.md) for the L
    - **Configurable global hotkey** (default Ctrl+Shift+M; X11 only on Linux)
    - **Sound feedback** on mute/unmute (built-in sounds + configurable custom WAV paths)
    - **Desktop notifications** on mute/unmute (optional, via `notifications_enabled`)
-   - **Hook commands** — run shell commands on mute/unmute (`on_mute_command`, `on_unmute_command`)
+   - **Webhooks** — HTTP POST on mute/unmute (`on_mute_url`, `on_unmute_url` with optional custom body)
    - **System tray icon** on Windows (Win32) and Linux (GTK) with context menu (status, toggle, settings, reconnect, quit)
    - **Graceful no-device startup** — starts without a Scarlett device, shows "Disconnected" in tray, reconnects automatically when device appears
    - **Settings dialog** — mute color, hotkey, sound toggle, custom sound paths with browse/clear/preview, per-sound volume sliders, mute inputs, hook commands (Advanced > Hooks section), autostart, notifications toggle, device info (cross-platform egui/eframe)

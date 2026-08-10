@@ -1,5 +1,6 @@
 //! System tray — platform-specific event loops and shared state.
 
+mod browser_sync;
 mod shared;
 pub(crate) mod state;
 

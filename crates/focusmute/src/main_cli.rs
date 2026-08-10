@@ -49,10 +49,11 @@ fn main() {
     let args = Args::parse();
 
     let default_level = if args.verbose { "debug" } else { "warn" };
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(default_level))
-        .format_timestamp(None)
-        .format_target(false)
-        .init();
+    flexi_logger::Logger::try_with_str(default_level)
+        .unwrap_or_else(|_| flexi_logger::Logger::try_with_str("warn").unwrap())
+        .format(flexi_logger::opt_format)
+        .start()
+        .ok();
 
     // Install Ctrl+C handler
     #[cfg(windows)]

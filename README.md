@@ -6,12 +6,13 @@ FocusMute monitors your system microphone's mute state and reflects it on your F
 
 ## Features
 
-- Global hotkey toggle (default: Ctrl+Shift+M) with sound feedback
+- Global hotkey toggle (default: Ctrl+Shift+M) and push-to-talk hotkey, with sound feedback
 - Configurable mute color per input (any hex color or named color)
 - Auto-reconnect on device disconnect and graceful startup without device
 - Schema-driven multi-model support (auto-discovers unknown Scarlett 4th Gen devices)
 - Settings GUI (tray app) and TOML config file
-- Extensible via shell hook commands, desktop notifications, and device serial targeting
+- Browser extension syncs Google Meet mute state to LEDs ([focusmute-extension](https://github.com/barnumbirr/focusmute-extension))
+- Extensible via webhooks (HTTP POST on mute/unmute), desktop notifications, and device serial targeting
 
 ## Supported Devices
 
@@ -61,7 +62,7 @@ See [dist/linux/README-linux.md](dist/linux/README-linux.md) for full details an
 
 ### Tray App (Windows + Linux)
 
-Launch `focusmute` (or `focusmute.exe` on Windows). It sits in the system tray, monitors your mic, and updates LEDs automatically. Right-click for the menu (Status, Toggle Mute, Settings, Reconnect Device, Quit). The global hotkey (default: Ctrl+Shift+M) toggles mute. If no Scarlett device is connected at startup, the app starts in "Disconnected" mode and automatically connects when the device is plugged in. On exit, inputs are automatically unmuted and LEDs restored to their normal state. The tray app logs to `focusmute.log` in the config directory (info level by default; override with `RUST_LOG` env var). On startup, any config parse errors or validation warnings are shown as a desktop notification.
+Launch `focusmute` (or `focusmute.exe` on Windows). It sits in the system tray, monitors your mic, and updates LEDs automatically. Right-click for the menu (Status, Toggle Mute, Settings, Reconnect Device, Quit). The global hotkey (default: Ctrl+Shift+M) toggles mute. If no Scarlett device is connected at startup, the app starts in "Disconnected" mode and automatically connects when the device is plugged in. On exit, inputs are automatically unmuted and LEDs restored to their normal state. The tray app logs to `focusmute.log` in the config directory (configurable via `log_level` in settings). On startup, any config parse errors or validation warnings are shown as a desktop notification.
 
 **Linux notes:** The tray app uses GTK 3. Global hotkeys work on X11; on Wayland they may not function (use the tray menu instead).
 
@@ -78,12 +79,12 @@ focusmute-cli [--verbose|-v] [--config <path>] <command>
 
 | Command | Description |
 |---------|-------------|
-| `monitor` | Watch mic mute state and update LEDs in real time |
+| `monitor` | Watch mic mute state and update LEDs in real time (`--on-mute`/`--on-unmute` webhook URL overrides) |
 | `status` | Show device, microphone, and config status (`--json`) |
 | `config` | Show current configuration and file paths (`--json`, `--edit` to open in `$VISUAL`/`$EDITOR`) |
 | `devices` | List connected Focusrite devices (`--json`) |
 | `probe` | Detect device and extract firmware schema (`--dump-schema` for full JSON) |
-| `map` | Interactive LED identification (lights one index at a time) |
+| `map` | Interactive LED identification, lights one index at a time (`--index`, `--count`, `--value`, `--delay`, `--output`, `--output-code`, `--accept`) |
 | `predict` | Predict LED layout from a schema JSON file (no hardware needed) |
 | `descriptor` | Dump raw descriptor bytes (`--offset`, `--size`) |
 | `mute` | Mute the default capture device |
@@ -108,6 +109,7 @@ mute_inputs = "all"
 
 [keyboard]
 hotkey = "Ctrl+Shift+M"
+push_to_talk_hotkey = ""
 
 [sound]
 sound_enabled = true
@@ -115,15 +117,20 @@ mute_sound_volume = 1.0
 unmute_sound_volume = 1.0
 mute_sound_path = ""
 unmute_sound_path = ""
+suppress_browser_sync_sound = true
 
 [system]
 autostart = false
 device_serial = ""
 notifications_enabled = false
+log_level = "info"
+# websocket_port = 9736
 
 [hooks]
-on_mute_command = ""
-on_unmute_command = ""
+on_mute_url = ""
+on_unmute_url = ""
+on_mute_body = ""
+on_unmute_body = ""
 ```
 
 | Setting | Default | Description |
@@ -132,16 +139,22 @@ on_unmute_command = ""
 | `[indicator].mute_inputs` | `"all"` | Which inputs to indicate: `"all"`, `"1"`, `"2"`, `"1,2"` |
 | `[indicator.input_colors]` | `{}` | Per-input mute colors (TOML table, e.g. `1 = "#FF0000"`) |
 | `[keyboard].hotkey` | `"Ctrl+Shift+M"` | Global hotkey (tray app; X11 only on Linux) |
+| `[keyboard].push_to_talk_hotkey` | `""` | Hold to unmute, release to re-mute (empty = disabled) |
 | `[sound].sound_enabled` | `true` | Play sound on mute/unmute |
 | `[sound].mute_sound_volume` | `1.0` | Volume for mute sound (0.0–1.0) |
 | `[sound].unmute_sound_volume` | `1.0` | Volume for unmute sound (0.0–1.0) |
 | `[sound].mute_sound_path` | `""` | Custom WAV path (empty = built-in) |
 | `[sound].unmute_sound_path` | `""` | Custom WAV path (empty = built-in) |
+| `[sound].suppress_browser_sync_sound` | `true` | Skip mute/unmute beeps for changes initiated by the browser extension |
 | `[system].autostart` | `false` | Start on login (tray app) |
 | `[system].device_serial` | `""` | Preferred device serial (empty = auto-select first) |
 | `[system].notifications_enabled` | `false` | Show desktop notification on mute/unmute |
-| `[hooks].on_mute_command` | `""` | Shell command to run on mute (empty = disabled) |
-| `[hooks].on_unmute_command` | `""` | Shell command to run on unmute (empty = disabled) |
+| `[system].log_level` | `"info"` | Log level: error, warn, info, debug, trace |
+| `[system].websocket_port` | `0` | Port for browser extension sync (0 = disabled, e.g. 9736; must be >= 1024) |
+| `[hooks].on_mute_url` | `""` | Webhook URL to POST on mute (empty = disabled) |
+| `[hooks].on_unmute_url` | `""` | Webhook URL to POST on unmute (empty = disabled) |
+| `[hooks].on_mute_body` | `""` | Custom JSON body for mute webhook (empty = `{"event":"mute"}`) |
+| `[hooks].on_unmute_body` | `""` | Custom JSON body for unmute webhook (empty = `{"event":"unmute"}`) |
 
 ## Architecture
 
@@ -170,7 +183,7 @@ focusmute/
 │       ├── context.rs                  Device resolution pipeline
 │       ├── device.rs                   USB communication (ScarlettDevice trait)
 │       ├── error.rs                    Unified error types
-│       ├── hooks.rs                    Shell command hooks (on_mute/on_unmute)
+│       ├── hooks.rs                    Webhook hooks (HTTP POST on mute/unmute)
 │       ├── layout.rs                   LED layout prediction from schema
 │       ├── models.rs                   Hardcoded device profiles
 │       ├── monitor.rs                  Mute state machine (debounce + decide)
@@ -209,6 +222,7 @@ focusmute/
         ├── tray/                       System tray app
         │   ├── mod.rs                  Platform dispatcher + single-instance
         │   ├── shared.rs               Shared event loop (PlatformAdapter trait)
+        │   ├── browser_sync.rs         HTTP listener for browser extension mute sync
         │   ├── state/                  Tray state management
         │   │   ├── mod.rs              TrayState, TrayResources, message dispatch
         │   │   ├── icon.rs             Icon loading + caching (CachedIcon)
@@ -236,7 +250,7 @@ focusmute/
 | `context` | Device resolution pipeline | `DeviceContext` |
 | `device` | USB communication | `ScarlettDevice` trait, `DeviceInfo`, `FirmwareVersion` |
 | `error` | Unified errors | `FocusmuteError`, `DeviceError`, `AudioError` |
-| `hooks` | Shell command hooks | `run_action_hook` |
+| `hooks` | Webhook hooks (HTTP POST) | `run_action_hook` |
 | `layout` | LED layout prediction | `PredictedLayout`, `PredictedLed`, `Confidence` |
 | `led/color` | Color parsing | `parse_color`, `format_color` |
 | `led/ops` | LED device operations | `apply_mute_indicator`, `clear_mute_indicator`, `restore_on_exit` |
@@ -285,14 +299,14 @@ Audio Backend ---poll---> MuteIndicator ---action---> LED ops ---USB---> Device
 ### Prerequisites
 
 - Rust toolchain (stable)
-- **Linux:** `libpulse-dev`, `pkg-config`, `libasound2-dev`, `libgtk-3-dev`, `libxdo-dev`, `libappindicator3-dev`, `libegl-dev`
+- **Linux:** `libpulse-dev`, `pkg-config`, `libasound2-dev`, `libgtk-3-dev`, `libxdo-dev`, `libappindicator3-dev`, `libegl-dev`, `libssl-dev`
 - **Windows cross-compile:** `gcc-mingw-w64-x86-64`, `x86_64-pc-windows-gnu` target
 
 ### Build
 
 ```bash
 # Linux (native)
-sudo apt-get install libpulse-dev pkg-config libasound2-dev libgtk-3-dev libxdo-dev libappindicator3-dev libegl-dev
+sudo apt-get install libpulse-dev pkg-config libasound2-dev libgtk-3-dev libxdo-dev libappindicator3-dev libegl-dev libssl-dev
 cargo build --release
 
 # Windows (cross-compile from Linux/WSL2)

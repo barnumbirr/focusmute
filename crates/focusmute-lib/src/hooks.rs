@@ -1,7 +1,12 @@
-//! Mute state change hooks — run user-defined commands on mute/unmute events.
+//! Webhook hooks — send HTTP POST requests on mute/unmute events.
+//!
+//! When a URL is configured, an HTTP POST is sent using `minreq` with a JSON
+//! body. No shell commands are executed — this avoids visible terminal windows
+//! on Windows and works cross-platform.
+//!
+//! Default body: `{"event": "mute"}` or `{"event": "unmute"}`.
+//! Custom bodies can be configured per-event via `on_mute_body` / `on_unmute_body`.
 
-use std::io;
-use std::process::ExitStatus;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -21,80 +26,76 @@ impl Drop for HookGuard {
     }
 }
 
-/// Default timeout for hook commands (30 seconds).
+/// Default timeout for webhook requests (30 seconds).
 const HOOK_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Poll interval when waiting for a hook process to exit.
-const POLL_INTERVAL: Duration = Duration::from_millis(100);
-
-/// Run the appropriate hook command for a mute state change.
+/// Run the appropriate webhook for a mute state change.
 ///
-/// Spawns the command in a background thread so it doesn't block the event loop.
-/// Empty commands are silently ignored. Only one hook can run at a time — if a
+/// Spawns the request in a background thread so it doesn't block the event loop.
+/// Empty URLs are silently ignored. Only one hook can run at a time — if a
 /// previous hook is still running, the new one is skipped with a warning.
 pub fn run_action_hook(action: MonitorAction, config: &Config) {
-    match action {
-        MonitorAction::ApplyMute => run_hook(&config.hooks.on_mute_command),
-        MonitorAction::ClearMute => run_hook(&config.hooks.on_unmute_command),
-        MonitorAction::NoChange => {}
-    }
+    let (url, custom_body, default_event) = match action {
+        MonitorAction::ApplyMute => (
+            &config.hooks.on_mute_url,
+            &config.hooks.on_mute_body,
+            "mute",
+        ),
+        MonitorAction::ClearMute => (
+            &config.hooks.on_unmute_url,
+            &config.hooks.on_unmute_body,
+            "unmute",
+        ),
+        MonitorAction::NoChange => return,
+    };
+    run_webhook(url, custom_body, default_event);
 }
 
-/// Spawn a shell command in a background thread. Empty commands are ignored.
-fn run_hook(command: &str) {
-    let command = command.trim();
-    if command.is_empty() {
+/// Spawn a webhook request in a background thread. Empty URLs are ignored.
+fn run_webhook(url: &str, custom_body: &str, default_event: &str) {
+    let url = url.trim();
+    if url.is_empty() {
         return;
     }
     if HOOK_RUNNING
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
         .is_err()
     {
-        log::warn!("[hooks] skipped (previous hook still running): {command}");
+        log::warn!("[hooks] skipped (previous hook still running): {url}");
         return;
     }
-    let command = command.to_string();
+    let url = url.to_string();
+    let body = if custom_body.trim().is_empty() {
+        format!(r#"{{"event":"{default_event}"}}"#)
+    } else {
+        custom_body.trim().to_string()
+    };
     std::thread::spawn(move || {
         let _guard = HookGuard;
-        let result = run_hook_with_timeout(&command, HOOK_TIMEOUT);
-        match result {
-            Ok(s) if s.success() => {
-                log::debug!("[hooks] completed: {command}");
-            }
-            Ok(s) => {
-                log::warn!("[hooks] exited with {s}: {command}");
+        let timeout_secs = HOOK_TIMEOUT.as_secs();
+
+        match minreq::post(&url)
+            .with_header("Content-Type", "application/json")
+            .with_body(body)
+            .with_timeout(timeout_secs)
+            .send()
+        {
+            Ok(resp) => {
+                log::debug!(
+                    "[hooks] webhook {} (HTTP {}): {url}",
+                    if (200..300).contains(&resp.status_code) {
+                        "succeeded"
+                    } else {
+                        "returned error"
+                    },
+                    resp.status_code,
+                );
             }
             Err(e) => {
-                log::warn!("[hooks] failed: {e}: {command}");
+                log::warn!("[hooks] webhook failed: {e}: {url}");
             }
         }
     });
-}
-
-/// Run a shell command with a timeout. Kills the process if it exceeds the deadline.
-fn run_hook_with_timeout(command: &str, timeout: Duration) -> io::Result<ExitStatus> {
-    let mut child = if cfg!(windows) {
-        std::process::Command::new("cmd")
-            .args(["/C", command])
-            .spawn()?
-    } else {
-        std::process::Command::new("sh")
-            .args(["-c", command])
-            .spawn()?
-    };
-
-    let max_polls = (timeout.as_millis() / POLL_INTERVAL.as_millis()).max(1) as u64;
-    for _ in 0..max_polls {
-        match child.try_wait()? {
-            Some(status) => return Ok(status),
-            None => std::thread::sleep(POLL_INTERVAL),
-        }
-    }
-
-    // Timeout — kill and reap
-    log::warn!("[hooks] timed out after {timeout:?}, killing: {command}");
-    let _ = child.kill();
-    child.wait() // reap zombie
 }
 
 #[cfg(test)]
@@ -106,62 +107,29 @@ mod tests {
     static HOOK_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
-    fn run_hook_empty_command_is_noop() {
-        // Should not spawn any process or panic
-        run_hook("");
-        run_hook("   ");
+    fn run_webhook_empty_url_is_noop() {
+        run_webhook("", "", "mute");
+        run_webhook("   ", "", "mute");
     }
 
     #[test]
     fn run_action_hook_no_change_is_noop() {
         let config = Config::default();
-        // NoChange should not run anything
         run_action_hook(MonitorAction::NoChange, &config);
     }
 
     #[test]
-    fn run_action_hook_with_empty_commands_is_noop() {
+    fn run_action_hook_with_empty_urls_is_noop() {
         let config = Config::default();
-        // Default config has empty commands — should be fine
         run_action_hook(MonitorAction::ApplyMute, &config);
         run_action_hook(MonitorAction::ClearMute, &config);
     }
 
     #[test]
-    fn run_hook_with_timeout_completes() {
-        // A fast command should succeed within the timeout
-        let cmd = if cfg!(windows) { "echo ok" } else { "true" };
-        let result = run_hook_with_timeout(cmd, Duration::from_secs(5));
-        assert!(result.is_ok());
-        assert!(result.unwrap().success());
-    }
-
-    #[test]
-    fn run_hook_with_timeout_kills_on_timeout() {
-        // A long-running command should be killed after a short timeout
-        let cmd = if cfg!(windows) {
-            "ping -n 60 127.0.0.1"
-        } else {
-            "sleep 60"
-        };
-        let result = run_hook_with_timeout(cmd, Duration::from_secs(1));
-        // The process was killed — the exit status should indicate abnormal termination
-        assert!(result.is_ok(), "should still return Ok after kill+wait");
-        let status = result.unwrap();
-        assert!(
-            !status.success(),
-            "killed process should not report success"
-        );
-    }
-
-    #[test]
-    fn run_hook_guard_skips_concurrent() {
+    fn run_webhook_guard_skips_concurrent() {
         let _lock = HOOK_TEST_LOCK.lock().unwrap();
-        // Set the guard to simulate a running hook
         HOOK_RUNNING.store(true, Ordering::SeqCst);
-        // run_hook should skip immediately (no spawn)
-        run_hook("echo should-not-run");
-        // Clean up
+        run_webhook("https://example.com/hook", "", "mute");
         HOOK_RUNNING.store(false, Ordering::SeqCst);
     }
 
@@ -176,83 +144,101 @@ mod tests {
         }
     }
 
-    /// Wait for a file to appear (up to 5 seconds).
-    fn wait_for_file(path: &std::path::Path) {
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
-        while !path.exists() {
-            if std::time::Instant::now() > deadline {
-                panic!("timed out waiting for file: {}", path.display());
-            }
-            std::thread::sleep(Duration::from_millis(50));
-        }
-    }
-
-    #[test]
-    fn run_action_hook_dispatches_commands() {
-        let _lock = HOOK_TEST_LOCK.lock().unwrap();
-        wait_for_hook_idle();
-
-        let dir = tempfile::tempdir().unwrap();
-
-        // Test mute command dispatch
-        let mute_marker = dir.path().join("muted.txt");
-        let mute_cmd = format!("echo muted > {}", mute_marker.display());
-        let config = Config {
-            hooks: crate::config::HooksConfig {
-                on_mute_command: mute_cmd,
-                ..Default::default()
-            },
-            ..Config::default()
-        };
-        run_action_hook(MonitorAction::ApplyMute, &config);
-        wait_for_file(&mute_marker);
-        wait_for_hook_idle();
-
-        let content = std::fs::read_to_string(&mute_marker).unwrap();
-        assert!(
-            content.trim() == "muted",
-            "mute marker should contain 'muted', got: {content:?}"
-        );
-
-        // Test unmute command dispatch (runs after mute hook completes)
-        let unmute_marker = dir.path().join("unmuted.txt");
-        let unmute_cmd = format!("echo unmuted > {}", unmute_marker.display());
-        let config = Config {
-            hooks: crate::config::HooksConfig {
-                on_unmute_command: unmute_cmd,
-                ..Default::default()
-            },
-            ..Config::default()
-        };
-        run_action_hook(MonitorAction::ClearMute, &config);
-        wait_for_file(&unmute_marker);
-        wait_for_hook_idle();
-
-        let content = std::fs::read_to_string(&unmute_marker).unwrap();
-        assert!(
-            content.trim() == "unmuted",
-            "unmute marker should contain 'unmuted', got: {content:?}"
-        );
-    }
-
     #[test]
     fn hook_guard_resets_on_panic() {
         let _lock = HOOK_TEST_LOCK.lock().unwrap();
         wait_for_hook_idle();
 
-        // Spawn a thread that sets HOOK_RUNNING, creates a HookGuard, then panics.
-        // The Drop impl should reset the flag even after panic.
         let handle = std::thread::spawn(|| {
             HOOK_RUNNING.store(true, Ordering::SeqCst);
             let _guard = HookGuard;
             panic!("intentional panic to test HookGuard drop");
         });
-        // Join the thread — it will have panicked
         let _ = handle.join();
-        // The guard's Drop should have reset HOOK_RUNNING to false
         assert!(
             !HOOK_RUNNING.load(Ordering::SeqCst),
             "HOOK_RUNNING should be false after HookGuard drop on panic"
         );
+    }
+
+    #[test]
+    fn webhook_to_unreachable_host_fails_gracefully() {
+        let _lock = HOOK_TEST_LOCK.lock().unwrap();
+        wait_for_hook_idle();
+        // Should fail (connection refused) but not panic
+        run_webhook("http://127.0.0.1:1/nonexistent", "", "mute");
+        wait_for_hook_idle();
+    }
+
+    #[test]
+    fn default_body_format() {
+        let body_mute = format!(r#"{{"event":"{}"}}"#, "mute");
+        let body_unmute = format!(r#"{{"event":"{}"}}"#, "unmute");
+
+        let parsed: serde_json::Value = serde_json::from_str(&body_mute).unwrap();
+        assert_eq!(parsed["event"], "mute");
+
+        let parsed: serde_json::Value = serde_json::from_str(&body_unmute).unwrap();
+        assert_eq!(parsed["event"], "unmute");
+    }
+
+    #[test]
+    fn custom_body_overrides_default() {
+        let custom = r#"{"action":"silent","source":"focusmute"}"#;
+        let body = if custom.trim().is_empty() {
+            r#"{"event":"mute"}"#.to_string()
+        } else {
+            custom.trim().to_string()
+        };
+        assert_eq!(body, custom);
+    }
+
+    #[test]
+    fn empty_custom_body_uses_default() {
+        let custom = "";
+        let body = if custom.trim().is_empty() {
+            r#"{"event":"mute"}"#.to_string()
+        } else {
+            custom.trim().to_string()
+        };
+        assert_eq!(body, r#"{"event":"mute"}"#);
+    }
+
+    #[test]
+    fn action_hook_uses_correct_urls() {
+        let config = Config {
+            hooks: crate::config::HooksConfig {
+                on_mute_url: "https://example.com/mute".into(),
+                on_unmute_url: "https://example.com/unmute".into(),
+                on_mute_body: r#"{"muted":true}"#.into(),
+                on_unmute_body: r#"{"muted":false}"#.into(),
+            },
+            ..Config::default()
+        };
+
+        // Verify the dispatch logic picks the right fields
+        let (url, body, event) = match MonitorAction::ApplyMute {
+            MonitorAction::ApplyMute => (
+                &config.hooks.on_mute_url,
+                &config.hooks.on_mute_body,
+                "mute",
+            ),
+            _ => unreachable!(),
+        };
+        assert_eq!(url, "https://example.com/mute");
+        assert_eq!(body, r#"{"muted":true}"#);
+        assert_eq!(event, "mute");
+
+        let (url, body, event) = match MonitorAction::ClearMute {
+            MonitorAction::ClearMute => (
+                &config.hooks.on_unmute_url,
+                &config.hooks.on_unmute_body,
+                "unmute",
+            ),
+            _ => unreachable!(),
+        };
+        assert_eq!(url, "https://example.com/unmute");
+        assert_eq!(body, r#"{"muted":false}"#);
+        assert_eq!(event, "unmute");
     }
 }

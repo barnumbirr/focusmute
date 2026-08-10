@@ -93,6 +93,11 @@ pub struct SoundConfig {
     /// Volume for unmute sound (0.0–1.0). Default: 1.0.
     #[serde(default = "default_sound_volume")]
     pub unmute_sound_volume: f32,
+
+    /// Suppress sound feedback when mute state changes via browser extension sync.
+    /// Default: true (sounds are suppressed for browser-initiated changes).
+    #[serde(default = "default_true")]
+    pub suppress_browser_sync_sound: bool,
 }
 
 impl Default for SoundConfig {
@@ -103,6 +108,7 @@ impl Default for SoundConfig {
             unmute_sound_path: String::new(),
             mute_sound_volume: default_sound_volume(),
             unmute_sound_volume: default_sound_volume(),
+            suppress_browser_sync_sound: true,
         }
     }
 }
@@ -124,9 +130,15 @@ pub struct SystemConfig {
 
     /// Log level for the tray app log file. Default: "info".
     /// Valid values: "error", "warn", "info", "debug", "trace".
-    /// Changes take effect on next launch.
     #[serde(default = "default_log_level")]
     pub log_level: String,
+
+    /// Port for browser extension mute sync. Default: 0 (disabled).
+    /// When the field is absent from the config file, defaults to 9736 for
+    /// backward compatibility. When nonzero, a localhost HTTP server listens
+    /// on this port for mute state messages from the browser extension.
+    #[serde(default = "default_websocket_port")]
+    pub websocket_port: u16,
 }
 
 impl Default for SystemConfig {
@@ -136,20 +148,29 @@ impl Default for SystemConfig {
             device_serial: String::new(),
             notifications_enabled: false,
             log_level: default_log_level(),
+            websocket_port: 0,
         }
     }
 }
 
-/// Mute state change hooks.
+/// Webhook hooks — HTTP POST on mute state changes.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct HooksConfig {
-    /// Command to run when muted. Empty = disabled.
-    #[serde(default)]
-    pub on_mute_command: String,
+    /// URL to POST when muted. Empty = disabled.
+    #[serde(default, alias = "on_mute_command")]
+    pub on_mute_url: String,
 
-    /// Command to run when unmuted. Empty = disabled.
+    /// URL to POST when unmuted. Empty = disabled.
+    #[serde(default, alias = "on_unmute_command")]
+    pub on_unmute_url: String,
+
+    /// Custom JSON body for the mute webhook. Empty = default `{"event":"mute"}`.
     #[serde(default)]
-    pub on_unmute_command: String,
+    pub on_mute_body: String,
+
+    /// Custom JSON body for the unmute webhook. Empty = default `{"event":"unmute"}`.
+    #[serde(default)]
+    pub on_unmute_body: String,
 }
 
 // ── Default value helpers ──
@@ -172,6 +193,9 @@ fn default_sound_volume() -> f32 {
 }
 fn default_log_level() -> String {
     "info".into()
+}
+fn default_websocket_port() -> u16 {
+    9736
 }
 
 /// Valid log level strings (case-insensitive matching during validation).
@@ -251,16 +275,19 @@ impl From<LegacyConfig> for Config {
                 unmute_sound_path: legacy.unmute_sound_path,
                 mute_sound_volume: legacy.mute_sound_volume,
                 unmute_sound_volume: legacy.unmute_sound_volume,
+                ..Default::default()
             },
             system: SystemConfig {
                 autostart: legacy.autostart,
                 device_serial: legacy.device_serial,
                 notifications_enabled: legacy.notifications_enabled,
                 log_level: default_log_level(),
+                websocket_port: default_websocket_port(),
             },
             hooks: HooksConfig {
-                on_mute_command: legacy.on_mute_command,
-                on_unmute_command: legacy.on_unmute_command,
+                on_mute_url: legacy.on_mute_command,
+                on_unmute_url: legacy.on_unmute_command,
+                ..Default::default()
             },
         }
     }
@@ -308,6 +335,8 @@ pub enum ValidationError {
     InvalidInputColor { input: String, reason: String },
     /// The `log_level` field is not a recognized level.
     InvalidLogLevel(String),
+    /// The browser sync port is a privileged port (1–1023).
+    InvalidWebSocketPort(u16),
 }
 
 impl fmt::Display for ValidationError {
@@ -329,6 +358,12 @@ impl fmt::Display for ValidationError {
                 write!(
                     f,
                     "Invalid log level \"{level}\". Valid values: error, warn, info, debug, trace"
+                )
+            }
+            ValidationError::InvalidWebSocketPort(port) => {
+                write!(
+                    f,
+                    "Browser sync port {port} is privileged (1–1023). Use a port >= 1024, or 0 to disable"
                 )
             }
         }
@@ -390,7 +425,9 @@ impl Config {
             Err(_) => {
                 // Rename can fail across filesystems; fall back to direct write + cleanup
                 let result = std::fs::write(path, &contents);
-                let _ = std::fs::remove_file(&tmp);
+                if let Err(e) = std::fs::remove_file(&tmp) {
+                    log::debug!("[config] could not remove temp file {}: {e}", tmp.display());
+                }
                 result
             }
         }
@@ -571,6 +608,13 @@ impl Config {
         if !VALID_LOG_LEVELS.contains(&self.system.log_level.to_lowercase().as_str()) {
             errors.push(ValidationError::InvalidLogLevel(
                 self.system.log_level.clone(),
+            ));
+        }
+
+        // Validate WebSocket port (0 = disabled, 1–1023 = privileged = rejected)
+        if self.system.websocket_port > 0 && self.system.websocket_port < 1024 {
+            errors.push(ValidationError::InvalidWebSocketPort(
+                self.system.websocket_port,
             ));
         }
 
@@ -782,8 +826,8 @@ notifications_enabled = true
         assert_eq!(c.sound.mute_sound_path, "/tmp/mute.wav");
         assert_eq!(c.sound.unmute_sound_path, "/tmp/unmute.wav");
         assert_eq!(c.system.device_serial, "ABC123");
-        assert_eq!(c.hooks.on_mute_command, "echo muted");
-        assert_eq!(c.hooks.on_unmute_command, "echo unmuted");
+        assert_eq!(c.hooks.on_mute_url, "echo muted");
+        assert_eq!(c.hooks.on_unmute_url, "echo unmuted");
         assert!(c.system.notifications_enabled);
     }
 
@@ -897,8 +941,8 @@ on_unmute_command = "echo u"
         assert!(c.system.autostart);
         assert_eq!(c.system.device_serial, "SER123");
         assert!(c.system.notifications_enabled);
-        assert_eq!(c.hooks.on_mute_command, "echo m");
-        assert_eq!(c.hooks.on_unmute_command, "echo u");
+        assert_eq!(c.hooks.on_mute_url, "echo m");
+        assert_eq!(c.hooks.on_unmute_url, "echo u");
     }
 
     #[test]
@@ -925,16 +969,19 @@ on_unmute_command = "echo u"
                 unmute_sound_path: "/tmp/unmute.wav".into(),
                 mute_sound_volume: 0.75,
                 unmute_sound_volume: 0.5,
+                ..Default::default()
             },
             system: SystemConfig {
                 autostart: true,
                 device_serial: "ABC123".into(),
                 notifications_enabled: true,
+                websocket_port: 9736,
                 ..Default::default()
             },
             hooks: HooksConfig {
-                on_mute_command: "echo muted".into(),
-                on_unmute_command: "echo unmuted".into(),
+                on_mute_url: "https://example.com/muted".into(),
+                on_unmute_url: "https://example.com/unmuted".into(),
+                ..Default::default()
             },
         };
         config.save_to(&path).unwrap();
@@ -960,16 +1007,14 @@ on_unmute_command = "echo u"
             config.sound.unmute_sound_path
         );
         assert_eq!(loaded.system.device_serial, config.system.device_serial);
-        assert_eq!(loaded.hooks.on_mute_command, config.hooks.on_mute_command);
-        assert_eq!(
-            loaded.hooks.on_unmute_command,
-            config.hooks.on_unmute_command
-        );
+        assert_eq!(loaded.hooks.on_mute_url, config.hooks.on_mute_url);
+        assert_eq!(loaded.hooks.on_unmute_url, config.hooks.on_unmute_url);
         assert_eq!(loaded.indicator.input_colors, config.indicator.input_colors);
         assert_eq!(
             loaded.system.notifications_enabled,
             config.system.notifications_enabled
         );
+        assert_eq!(loaded.system.websocket_port, config.system.websocket_port);
     }
 
     // ── parse_mute_inputs ──
@@ -1577,6 +1622,7 @@ on_unmute_command = "echo u"
                 unmute_sound_path: "/tmp/unmute.wav".into(),
                 mute_sound_volume: 0.3,
                 unmute_sound_volume: 0.8,
+                ..Default::default()
             },
             system: SystemConfig {
                 autostart: true,
@@ -1585,8 +1631,9 @@ on_unmute_command = "echo u"
                 ..Default::default()
             },
             hooks: HooksConfig {
-                on_mute_command: "echo muted".into(),
-                on_unmute_command: "echo unmuted".into(),
+                on_mute_url: "https://example.com/muted".into(),
+                on_unmute_url: "https://example.com/unmuted".into(),
+                ..Default::default()
             },
         };
         let toml_str = toml::to_string_pretty(&config).unwrap();
@@ -1610,11 +1657,8 @@ on_unmute_command = "echo u"
             config.sound.unmute_sound_path
         );
         assert_eq!(loaded.system.device_serial, config.system.device_serial);
-        assert_eq!(loaded.hooks.on_mute_command, config.hooks.on_mute_command);
-        assert_eq!(
-            loaded.hooks.on_unmute_command,
-            config.hooks.on_unmute_command
-        );
+        assert_eq!(loaded.hooks.on_mute_url, config.hooks.on_mute_url);
+        assert_eq!(loaded.hooks.on_unmute_url, config.hooks.on_unmute_url);
         assert_eq!(loaded.indicator.input_colors, config.indicator.input_colors);
         assert_eq!(
             loaded.system.notifications_enabled,
@@ -1989,5 +2033,94 @@ autostart = false
         let (config, warnings) = Config::load_from(&path);
         assert!(warnings.is_empty());
         assert_eq!(config.system.log_level, "info");
+    }
+
+    // ── WebSocket port ──
+
+    #[test]
+    fn websocket_port_defaults_to_0() {
+        let config = Config::default();
+        assert_eq!(config.system.websocket_port, 0);
+    }
+
+    #[test]
+    fn validate_websocket_port_zero_is_ok() {
+        let c = Config {
+            system: SystemConfig {
+                websocket_port: 0,
+                ..Default::default()
+            },
+            ..Config::default()
+        };
+        assert!(c.validate(None, 10_000_000).is_ok());
+    }
+
+    #[test]
+    fn validate_websocket_port_valid() {
+        for port in [1024, 9736, 65535] {
+            let c = Config {
+                system: SystemConfig {
+                    websocket_port: port,
+                    ..Default::default()
+                },
+                ..Config::default()
+            };
+            assert!(
+                c.validate(None, 10_000_000).is_ok(),
+                "port {port} should be valid"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_websocket_port_privileged_rejected() {
+        for port in [1, 80, 443, 1023] {
+            let c = Config {
+                system: SystemConfig {
+                    websocket_port: port,
+                    ..Default::default()
+                },
+                ..Config::default()
+            };
+            let errs = c.validate(None, 10_000_000).unwrap_err();
+            assert!(
+                errs.iter()
+                    .any(|e| matches!(e, ValidationError::InvalidWebSocketPort(_))),
+                "port {port} should be rejected as privileged, got: {errs:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn websocket_port_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+
+        let mut config = Config::default();
+        config.system.websocket_port = 9736;
+        config.save_to(&path).unwrap();
+
+        let (loaded, warnings) = Config::load_from(&path);
+        assert!(warnings.is_empty());
+        assert_eq!(loaded.system.websocket_port, 9736);
+    }
+
+    #[test]
+    fn websocket_port_missing_field_defaults_to_serde_9736() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            r#"
+[system]
+autostart = false
+log_level = "info"
+"#,
+        )
+        .unwrap();
+
+        let (config, warnings) = Config::load_from(&path);
+        assert!(warnings.is_empty());
+        assert_eq!(config.system.websocket_port, 9736);
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "focusmute"
-version = "0.8.0"
+version = "0.9.1"
 edition = "2024"
 description = "Hotkey mute control for Focusrite Scarlett interfaces"
 authors = ["Martin Simon"]
@@ -23,7 +23,7 @@ clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.149"
 log = "0.4"
-env_logger = "0.11"
+flexi_logger = { version = "0.31", default-features = false }
 
 [target.'cfg(not(windows))'.dependencies]
 ctrlc = "3"
@@ -58,7 +58,7 @@ windows = { version = "0.62", features = [
     "UI_Notifications",
 ] }
 
-[target.'cfg(windows)'.build-dependencies]
+[build-dependencies]
 winresource = "0.1"
 
 [dev-dependencies]
@@ -66,6 +66,12 @@ tempfile = "3"
 assert_cmd = "2"
 predicates = "3"
 
+# cargo-wix auto-detects WixUI_FeatureTree → WixUIExtension, but does
+# not auto-detect arbitrary extensions like WixUtilExtension. We use
+# util:CloseApplication in main.wxs (so MSI's Restart Manager isn't
+# hung up by the tray app's missing message pump during upgrade /
+# uninstall) — declare it here so candle and light both link the
+# extension during the cargo-wix run.
 [package.metadata.deb]
 name = "focusmute"
 maintainer = "Martin Simon"

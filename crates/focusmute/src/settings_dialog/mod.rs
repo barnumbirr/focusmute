@@ -20,25 +20,22 @@ mod ui;
 /// Maximum custom sound file size (10 MB).
 const MAX_SOUND_FILE_BYTES: u64 = 10 * 1024 * 1024;
 
-/// Holds a rodio output sink and player for previewing sounds in the settings dialog.
+/// Stateless preview player for the settings dialog.
+///
+/// Kept as a struct to minimise caller churn; each `play()` call spawns a
+/// short-lived playback thread and holds no WASAPI state between calls.
 #[cfg(any(windows, target_os = "linux"))]
-pub(crate) struct SoundPreviewPlayer {
-    _device_sink: Option<rodio::MixerDeviceSink>,
-    player: Option<rodio::Player>,
-}
+pub(crate) struct SoundPreviewPlayer;
 
 #[cfg(any(windows, target_os = "linux"))]
 impl SoundPreviewPlayer {
     pub fn new() -> Self {
-        SoundPreviewPlayer {
-            _device_sink: None,
-            player: None,
-        }
+        SoundPreviewPlayer
     }
 
     pub fn play(&mut self, path: &str, fallback: &'static [u8], volume: f32) {
         let (sound, _warning) = crate::sound::load_sound_data(path, fallback);
-        crate::sound::play_sound(&sound, &mut self._device_sink, &mut self.player, volume);
+        crate::sound::play_sound(&sound, volume);
     }
 }
 

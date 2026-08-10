@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-08-10
+
+### Added
+
+- Browser extension mute sync — detects mute state from Google Meet and relays it to FocusMute over localhost HTTP, updating Scarlett LEDs to reflect browser mute state
+- `websocket_port` config field in `[system]` section (default 0 = disabled for new installs; existing configs without the field get 9736 for backward compatibility); privileged ports (1–1023) rejected by validation
+- HTTP listener thread (`127.0.0.1` only) with JSON protocol: `mute_state` POST messages drive `set_muted()`, `ping`/`pong` keepalive; uses plain HTTP instead of WebSocket because Firefox forces TLS on WebSocket connections from extension background scripts. `mute_state` bursts arriving within one event-loop pass are coalesced (last state wins) so transient mute flickers on Meet's join screen cannot latch a stale state
+- CORS origin checking: requests from web pages are rejected (403); only browser extension origins (`moz-extension://`, `chrome-extension://`) and origin-less requests are allowed
+- HTTP request hardening: case-insensitive header parsing, request line size limit (8 KB), total header size limit (8 KB), `Connection: close` on all responses
+- Browser sync settings in Settings > Advanced with port field (restart required on change)
+- `suppress_browser_sync_sound` config field (`[sound]`, default `true`) with settings checkbox — skips the mute/unmute beep when the state change was initiated by the browser extension
+- Cross-browser extension (Firefox 120+, Chrome/Edge 116+, Manifest V3): content script with MutationObserver on Meet mute button, service worker using `fetch()` HTTP POST
+- `Msg::BrowserMute(bool)` event variant for browser-driven mute changes
+- `websocket_port_changed` field in `SettingsChanges` with restart notification
+
+### Changed
+
+- Mute/unmute sounds no longer hold an audio output stream open between beeps — each beep opens the stream on a short-lived thread, drains, and closes it. A stream held idle for hours was force-evicted when other apps (games, conferencing) reconfigured the audio device, which could wedge USB DAC drivers until a manual disable/enable cycle. The drain wait is bounded by the sound's duration plus a safety margin, so an audio device lost mid-beep cannot leak the playback thread
+- Renamed `websocket.rs` module to `browser_sync.rs`; log prefix `[ws]` → `[sync]`; UI label "WebSocket port" → "Port" (in Browser sync section)
+- Startup log banner includes `sync=<port|off>`
+- Background thread shutdown uses shared `timed_join` helper (was duplicated inline)
+- Channel sender no longer held by main thread — background thread death is now properly detected via `TryRecvError::Disconnected`
+- `BrowserMute` messages log a warning when no audio monitor is available (was silently dropped)
+- Hooks are now pure webhooks (HTTP POST via `minreq`) — shell command execution removed. `on_mute_command`/`on_unmute_command` renamed to `on_mute_url`/`on_unmute_url` (old names accepted as aliases). New `on_mute_body`/`on_unmute_body` fields for custom JSON payloads (default: `{"event":"mute/unmute"}`)
+
+### Fixed
+
+- Settings dialog Save/Cancel buttons are now readable in Windows light theme — Cancel used a hardcoded dark fill with theme-colored (near-black) text; it now uses the theme's default button styling, and Save's blue fill gets explicit white text
+
 ## [0.8.0] - 2026-03-16
 
 ### Added

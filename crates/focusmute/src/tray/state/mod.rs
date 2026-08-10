@@ -14,7 +14,7 @@ mod menu;
 
 pub use hotkey::{HotkeyState, register_hotkeys, reregister_ptt, reregister_toggle};
 pub(crate) use menu::show_startup_warnings;
-pub use menu::{TrayMenu, apply_mute_ui, build_tray_icon, build_tray_menu};
+pub use menu::{TrayMenu, apply_mute_ui, build_tray_icon, build_tray_menu, set_tray_mute_state};
 
 use focusmute_lib::config::Config;
 use focusmute_lib::context::DeviceContext;
@@ -37,6 +37,9 @@ pub struct SettingsChanges {
     pub new_toggle_str: String,
     pub ptt_changed: bool,
     pub new_ptt_str: String,
+    pub log_level_changed: bool,
+    pub new_log_level: String,
+    pub websocket_port_changed: bool,
 }
 
 // ── Audio/hotkey resource bundle ──
@@ -49,8 +52,6 @@ pub struct TrayResources {
     pub mute_sound: sound::DecodedSound,
     pub unmute_sound: sound::DecodedSound,
     pub hotkey: HotkeyState,
-    pub player: Option<rodio::Player>,
-    pub _device_sink: Option<rodio::MixerDeviceSink>,
     pub notifier: crate::notification::Notifier,
 }
 
@@ -71,8 +72,6 @@ impl TrayResources {
                 mute_sound,
                 unmute_sound,
                 hotkey,
-                player: None,
-                _device_sink: None,
                 notifier: crate::notification::Notifier::new(),
             },
             warnings,
@@ -84,6 +83,7 @@ impl TrayResources {
 
 pub enum Msg {
     MutePoll(bool),
+    BrowserMute(bool),
 }
 
 // ── Autostart ──
@@ -364,6 +364,10 @@ impl TrayState {
         let ptt_changed =
             new_config.keyboard.push_to_talk_hotkey != self.config.keyboard.push_to_talk_hotkey;
         let new_ptt_str = new_config.keyboard.push_to_talk_hotkey.clone();
+        let log_level_changed = new_config.system.log_level != self.config.system.log_level;
+        let new_log_level = new_config.system.log_level.clone();
+        let websocket_port_changed =
+            new_config.system.websocket_port != self.config.system.websocket_port;
 
         let warnings = self.apply_config(new_config, device);
 
@@ -375,6 +379,9 @@ impl TrayState {
             new_toggle_str,
             ptt_changed,
             new_ptt_str,
+            log_level_changed,
+            new_log_level,
+            websocket_port_changed,
         }
     }
 
@@ -442,6 +449,16 @@ pub fn handle_menu_event(
                     "Could not register push-to-talk hotkey \"{}\". It may be in use by another application.",
                     changes.new_ptt_str,
                 ));
+            }
+            if changes.log_level_changed {
+                log::info!("[settings] log level changing to {}", changes.new_log_level);
+                crate::set_log_level(&changes.new_log_level);
+            }
+            if changes.websocket_port_changed {
+                log::info!("[settings] browser sync port changed — restart required");
+                crate::notification::Notifier::show_oneshot(
+                    "Browser sync port changed. Restart FocusMute for the change to take effect.",
+                );
             }
             log::info!("[settings] saved");
         } else {
@@ -612,6 +629,21 @@ mod tests {
         assert_eq!(changes.new_toggle_str, "F12");
         assert!(changes.ptt_changed);
         assert_eq!(changes.new_ptt_str, "Ctrl+Space");
+        assert!(!changes.log_level_changed);
+    }
+
+    #[test]
+    fn handle_settings_result_detects_log_level_change() {
+        let dev = make_mock_device();
+        let mut state = TrayState::init_with_config(Config::default(), &dev).unwrap();
+
+        let mut new_config = state.config.clone();
+        new_config.system.log_level = "debug".into();
+
+        let changes = state.handle_settings_result(new_config, Some(&dev));
+
+        assert!(changes.log_level_changed);
+        assert_eq!(changes.new_log_level, "debug");
     }
 
     // Phase 3.2 — reconnect integration flow tests

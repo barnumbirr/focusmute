@@ -92,6 +92,9 @@ mod wasapi {
             pnotify: *mut AUDIO_VOLUME_NOTIFICATION_DATA,
         ) -> windows::core::Result<()> {
             if !pnotify.is_null() {
+                // SAFETY: The null check above guards the dereference. The pointer
+                // is provided by the Windows audio endpoint volume callback and is
+                // guaranteed valid for the duration of this call per the COM contract.
                 let muted = unsafe { (*pnotify).bMuted.as_bool() };
                 self.muted.store(muted, Ordering::SeqCst);
                 if let Ok(mut changed) = self.signal.0.lock() {

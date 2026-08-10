@@ -211,11 +211,14 @@ mod win_enum {
         enumerate_pal_paths_inner(dev_info_guard.as_raw(), &mut callback)
     }
 
+    /// Maximum number of device interfaces to enumerate per device class.
+    const MAX_DEVICE_INTERFACES: u32 = 32;
+
     fn enumerate_pal_paths_inner<T>(
         dev_info: HDEVINFO,
         callback: &mut impl FnMut(String) -> Option<T>,
     ) -> Option<T> {
-        for index in 0..32 {
+        for index in 0..MAX_DEVICE_INTERFACES {
             let mut iface = SP_DEVICE_INTERFACE_DATA {
                 cbSize: mem::size_of::<SP_DEVICE_INTERFACE_DATA>() as u32,
                 ..Default::default()

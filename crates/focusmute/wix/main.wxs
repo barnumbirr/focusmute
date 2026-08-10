@@ -5,7 +5,8 @@
     <?define PlatformProgramFilesFolder = "ProgramFilesFolder" ?>
 <?endif ?>
 
-<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'
+     xmlns:util='http://schemas.microsoft.com/wix/UtilExtension'>
 
     <Product
         Id='*'
@@ -28,6 +29,7 @@
 
         <MajorUpgrade
             Schedule='afterInstallInitialize'
+            AllowSameVersionUpgrades='yes'
             DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.' />
 
         <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1' />
@@ -111,13 +113,46 @@
         <SetProperty Id='ARPINSTALLLOCATION' Value='[APPLICATIONFOLDER]' After='CostFinalize' />
         <Property Id='ARPHELPLINK' Value='https://github.com/barnumbirr/focusmute' />
 
-        <Icon Id='ProductIcon' SourceFile='$(var.CargoTargetBinDir)\focusmute.exe' />
+        <!-- Restart Manager handling.
+             ============================================================
+             FocusMute is a tray-only daemon: no top-level window, no
+             console in release builds. When MSI's Restart Manager
+             tries to ask the running process to shut down so its files
+             can be replaced (upgrade or uninstall), it has nowhere to
+             send the WM_QUERYENDSESSION/WM_CLOSE message — RM hangs for
+             ~30 s, then surfaces "The setup was unable to automatically
+             close all requested applications."
+
+             `util:CloseApplication` runs custom actions early in the
+             install sequence to send the close messages itself. With
+             `TerminateProcess='5'`, if the process doesn't exit within
+             5 seconds (likely, since the tray app has no message pump
+             for these), MSI calls `TerminateProcess()` directly.
+             Brutal, but the daemon is stateless across restarts (state
+             lives on the Scarlett's firmware) so terminate-then-restart
+             is the right move.
+
+             focusmute-cli is a one-shot CLI that's never running long
+             enough to matter, so no entry for it.
+        -->
+        <util:CloseApplication
+            Id='CloseFocusmute'
+            Target='focusmute.exe'
+            CloseMessage='yes'
+            EndSessionMessage='yes'
+            TerminateProcess='5'
+            RebootPrompt='no'
+            Description='Stopping FocusMute tray app...' />
+
+        <Icon Id='ProductIcon' SourceFile='crates\focusmute\wix\icon.ico' />
         <Property Id='ARPPRODUCTICON' Value='ProductIcon' />
 
         <UI>
             <UIRef Id='WixUI_FeatureTree' />
         </UI>
         <WixVariable Id='WixUILicenseRtf' Value='crates\focusmute\wix\License.rtf' />
+        <WixVariable Id='WixUIBannerBmp' Value='crates\focusmute\wix\banner.bmp' />
+        <WixVariable Id='WixUIDialogBmp' Value='crates\focusmute\wix\dialog.bmp' />
 
     </Product>
 </Wix>

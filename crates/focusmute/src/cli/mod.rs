@@ -126,10 +126,10 @@ pub enum Command {
 
     /// Run mute indicator (monitors mic mute, changes LED color)
     Monitor {
-        /// Shell command to run when mute is detected (overrides config)
+        /// Webhook URL to POST when mute is detected (overrides config)
         #[arg(long)]
         on_mute: Option<String>,
-        /// Shell command to run when unmute is detected (overrides config)
+        /// Webhook URL to POST when unmute is detected (overrides config)
         #[arg(long)]
         on_unmute: Option<String>,
     },

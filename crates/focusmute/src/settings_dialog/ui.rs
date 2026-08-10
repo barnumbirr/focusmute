@@ -30,6 +30,7 @@ pub struct SettingsApp {
     input_count: usize,
 
     sound_enabled: bool,
+    suppress_browser_sync_sound: bool,
     mute_sound_volume: f32,
     unmute_sound_volume: f32,
     autostart: bool,
@@ -39,8 +40,12 @@ pub struct SettingsApp {
     mute_sound_path: String,
     unmute_sound_path: String,
 
-    on_mute_command: String,
-    on_unmute_command: String,
+    on_mute_url: String,
+    on_unmute_url: String,
+    on_mute_body: String,
+    on_unmute_body: String,
+
+    websocket_port: String,
 
     // ── Sound preview ──
     preview_player: SoundPreviewPlayer,
@@ -97,6 +102,7 @@ impl SettingsApp {
             input_count,
 
             sound_enabled: config.sound.sound_enabled,
+            suppress_browser_sync_sound: config.sound.suppress_browser_sync_sound,
             mute_sound_volume: config.sound.mute_sound_volume,
             unmute_sound_volume: config.sound.unmute_sound_volume,
             autostart: config.system.autostart,
@@ -106,8 +112,12 @@ impl SettingsApp {
             mute_sound_path: config.sound.mute_sound_path.clone(),
             unmute_sound_path: config.sound.unmute_sound_path.clone(),
 
-            on_mute_command: config.hooks.on_mute_command.clone(),
-            on_unmute_command: config.hooks.on_unmute_command.clone(),
+            on_mute_url: config.hooks.on_mute_url.clone(),
+            on_unmute_url: config.hooks.on_unmute_url.clone(),
+            on_mute_body: config.hooks.on_mute_body.clone(),
+            on_unmute_body: config.hooks.on_unmute_body.clone(),
+
+            websocket_port: config.system.websocket_port.to_string(),
 
             preview_player: SoundPreviewPlayer::new(),
 
@@ -132,6 +142,7 @@ impl SettingsApp {
             hotkey: &self.hotkey,
             ptt_hotkey: &self.ptt_hotkey,
             sound_enabled: self.sound_enabled,
+            suppress_browser_sync_sound: self.suppress_browser_sync_sound,
             mute_sound_volume: self.mute_sound_volume,
             unmute_sound_volume: self.unmute_sound_volume,
             autostart: self.autostart,
@@ -141,8 +152,11 @@ impl SettingsApp {
             input_count: self.input_count,
             mute_sound_path: &self.mute_sound_path,
             unmute_sound_path: &self.unmute_sound_path,
-            on_mute_command: &self.on_mute_command,
-            on_unmute_command: &self.on_unmute_command,
+            on_mute_url: &self.on_mute_url,
+            on_unmute_url: &self.on_unmute_url,
+            on_mute_body: &self.on_mute_body,
+            on_unmute_body: &self.on_unmute_body,
+            websocket_port: &self.websocket_port,
             original: &self.original,
             max_sound_bytes: MAX_SOUND_FILE_BYTES,
         }) {
@@ -169,6 +183,7 @@ impl SettingsApp {
             ptt_hotkey: self.ptt_hotkey.clone(),
             mute_inputs_index: self.mute_inputs_index,
             sound_enabled: self.sound_enabled,
+            suppress_browser_sync_sound: self.suppress_browser_sync_sound,
             mute_sound_volume: self.mute_sound_volume,
             unmute_sound_volume: self.unmute_sound_volume,
             autostart: self.autostart,
@@ -176,8 +191,11 @@ impl SettingsApp {
             log_level: self.log_level.clone(),
             mute_sound_path: self.mute_sound_path.clone(),
             unmute_sound_path: self.unmute_sound_path.clone(),
-            on_mute_command: self.on_mute_command.clone(),
-            on_unmute_command: self.on_unmute_command.clone(),
+            on_mute_url: self.on_mute_url.clone(),
+            on_unmute_url: self.on_unmute_url.clone(),
+            on_mute_body: self.on_mute_body.clone(),
+            on_unmute_body: self.on_unmute_body.clone(),
+            websocket_port: self.websocket_port.clone(),
         }
     }
 }
@@ -191,6 +209,7 @@ struct FormSnapshot {
     ptt_hotkey: String,
     mute_inputs_index: usize,
     sound_enabled: bool,
+    suppress_browser_sync_sound: bool,
     mute_sound_volume: f32,
     unmute_sound_volume: f32,
     autostart: bool,
@@ -198,8 +217,11 @@ struct FormSnapshot {
     log_level: String,
     mute_sound_path: String,
     unmute_sound_path: String,
-    on_mute_command: String,
-    on_unmute_command: String,
+    on_mute_url: String,
+    on_unmute_url: String,
+    on_mute_body: String,
+    on_unmute_body: String,
+    websocket_port: String,
 }
 
 impl eframe::App for SettingsApp {
@@ -291,7 +313,7 @@ impl eframe::App for SettingsApp {
 
             // ── Sound section ──
             section_frame(ui, "Sound", |ui| {
-                ui.checkbox(&mut self.sound_enabled, "Sound Feedback");
+                ui.checkbox(&mut self.sound_enabled, "Sound feedback");
                 ui.add_space(4.0);
 
                 // Measure "Browse..." text width so Play buttons can match.
@@ -381,8 +403,7 @@ impl eframe::App for SettingsApp {
                     .min_col_width(80.0)
                     .spacing([12.0, 8.0])
                     .show(ui, |ui| {
-                        ui.label("Log level")
-                            .on_hover_text("Changes take effect on next launch");
+                        ui.label("Log level");
                         egui::ComboBox::from_id_salt("log_level_combo")
                             .selected_text(&self.log_level)
                             .show_ui(ui, |ui| {
@@ -409,34 +430,62 @@ impl eframe::App for SettingsApp {
                             ui.set_width(ui.available_width());
                             let text_width = ui.available_width() - 4.0;
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("Hooks").strong());
+                                ui.label(egui::RichText::new("Webhooks").strong());
                                 ui.label("ℹ").on_hover_ui(|ui| {
-                                    ui.label("Shell commands run when mute state changes.");
-                                    ui.horizontal(|ui| {
-                                        ui.label("Example:");
-                                        ui.label(
-                                            egui::RichText::new(
-                                                "curl -X POST https://example.com/webhook",
-                                            )
-                                            .monospace(),
-                                        );
-                                    });
+                                    ui.label("HTTP POST sent on mute state changes. Body is optional — defaults to {\"event\":\"mute\"} / {\"event\":\"unmute\"}.");
                                 });
                             });
                             ui.add_space(2.0);
-                            ui.label("On mute");
+                            ui.label("On mute URL");
                             ui.add(
-                                egui::TextEdit::singleline(&mut self.on_mute_command)
+                                egui::TextEdit::singleline(&mut self.on_mute_url)
                                     .desired_width(text_width)
-                                    .hint_text("(none)"),
+                                    .hint_text("https://example.com/webhook"),
+                            );
+                            ui.label("Body");
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.on_mute_body)
+                                    .desired_width(text_width)
+                                    .hint_text(r#"{"event":"mute"}"#),
                             );
                             ui.add_space(4.0);
-                            ui.label("On unmute");
+                            ui.label("On unmute URL");
                             ui.add(
-                                egui::TextEdit::singleline(&mut self.on_unmute_command)
+                                egui::TextEdit::singleline(&mut self.on_unmute_url)
                                     .desired_width(text_width)
-                                    .hint_text("(none)"),
+                                    .hint_text("https://example.com/webhook"),
                             );
+                            ui.label("Body");
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.on_unmute_body)
+                                    .desired_width(text_width)
+                                    .hint_text(r#"{"event":"unmute"}"#),
+                            );
+
+                            ui.add_space(10.0);
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("Browser sync").strong());
+                                ui.label("ℹ").on_hover_ui(|ui| {
+                                    ui.label("Syncs mute state from browser-based meeting apps (Google Meet, Teams) via a browser extension.");
+                                    ui.label("Install the FocusMute extension and set the same port here. Default: 9736. Requires restart.");
+                                });
+                            });
+                            ui.add_space(2.0);
+                            ui.checkbox(&mut self.suppress_browser_sync_sound, "Suppress sound on mute/unmute");
+                            ui.add_space(2.0);
+                            egui::Grid::new("browser_sync_grid")
+                                .num_columns(2)
+                                .min_col_width(80.0)
+                                .spacing([12.0, 8.0])
+                                .show(ui, |ui| {
+                                    ui.label("Port");
+                                    ui.add(
+                                        egui::TextEdit::singleline(&mut self.websocket_port)
+                                            .desired_width(120.0)
+                                            .hint_text("0 = disabled, e.g. 9736"),
+                                    );
+                                    ui.end_row();
+                                });
                         });
                 });
             // ── About section (collapsible, collapsed by default) ──
@@ -502,16 +551,20 @@ impl eframe::App for SettingsApp {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(8.0); // right padding
-                let save_btn = egui::Button::new("Save")
-                    .fill(egui::Color32::from_rgb(60, 130, 210))
-                    .min_size(egui::vec2(80.0, 0.0));
+                // The fill is fixed, so the text color must be too — the
+                // theme's light-mode text is near-black and unreadable on
+                // the blue fill.
+                let save_btn =
+                    egui::Button::new(egui::RichText::new("Save").color(egui::Color32::WHITE))
+                        .fill(egui::Color32::from_rgb(60, 130, 210))
+                        .min_size(egui::vec2(80.0, 0.0));
                 if ui.add(save_btn).clicked() {
                     self.try_save(ui.ctx());
                 }
 
-                let cancel_btn = egui::Button::new("Cancel")
-                    .fill(egui::Color32::from_rgb(80, 80, 85))
-                    .min_size(egui::vec2(80.0, 0.0));
+                // No custom fill: the theme's default button styling stays
+                // readable in both light and dark mode.
+                let cancel_btn = egui::Button::new("Cancel").min_size(egui::vec2(80.0, 0.0));
                 if ui.add(cancel_btn).clicked() {
                     self.cancel(ui.ctx());
                 }
@@ -551,6 +604,7 @@ pub(crate) struct ValidateParams<'a> {
     pub hotkey: &'a str,
     pub ptt_hotkey: &'a str,
     pub sound_enabled: bool,
+    pub suppress_browser_sync_sound: bool,
     pub mute_sound_volume: f32,
     pub unmute_sound_volume: f32,
     pub autostart: bool,
@@ -560,8 +614,11 @@ pub(crate) struct ValidateParams<'a> {
     pub input_count: usize,
     pub mute_sound_path: &'a str,
     pub unmute_sound_path: &'a str,
-    pub on_mute_command: &'a str,
-    pub on_unmute_command: &'a str,
+    pub on_mute_url: &'a str,
+    pub on_unmute_url: &'a str,
+    pub on_mute_body: &'a str,
+    pub on_unmute_body: &'a str,
+    pub websocket_port: &'a str,
     pub original: &'a Config,
     pub max_sound_bytes: u64,
 }
@@ -579,6 +636,22 @@ pub(crate) fn build_and_validate_config(p: &ValidateParams<'_>) -> Result<Config
         p.color_text.to_string()
     };
 
+    // Parse websocket_port from string (empty or "0" = disabled)
+    let ws_port_str = p.websocket_port.trim();
+    let websocket_port: u16 = if ws_port_str.is_empty() {
+        0
+    } else {
+        match ws_port_str.parse::<u16>() {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(vec![format!(
+                    "Invalid browser sync port \"{}\". Enter a number (0 = disabled, e.g. 9736)",
+                    p.websocket_port
+                )]);
+            }
+        }
+    };
+
     let candidate = Config {
         indicator: focusmute_lib::config::IndicatorConfig {
             mute_color: color_str,
@@ -591,6 +664,7 @@ pub(crate) fn build_and_validate_config(p: &ValidateParams<'_>) -> Result<Config
         },
         sound: focusmute_lib::config::SoundConfig {
             sound_enabled: p.sound_enabled,
+            suppress_browser_sync_sound: p.suppress_browser_sync_sound,
             mute_sound_path: p.mute_sound_path.to_string(),
             unmute_sound_path: p.unmute_sound_path.to_string(),
             mute_sound_volume: p.mute_sound_volume,
@@ -601,10 +675,13 @@ pub(crate) fn build_and_validate_config(p: &ValidateParams<'_>) -> Result<Config
             device_serial: p.original.system.device_serial.clone(),
             notifications_enabled: p.notifications_enabled,
             log_level: p.log_level.to_string(),
+            websocket_port,
         },
         hooks: focusmute_lib::config::HooksConfig {
-            on_mute_command: p.on_mute_command.to_string(),
-            on_unmute_command: p.on_unmute_command.to_string(),
+            on_mute_url: p.on_mute_url.to_string(),
+            on_unmute_url: p.on_unmute_url.to_string(),
+            on_mute_body: p.on_mute_body.to_string(),
+            on_unmute_body: p.on_unmute_body.to_string(),
         },
     };
 
@@ -731,6 +808,7 @@ mod tests {
             hotkey: "Ctrl+Shift+M",
             ptt_hotkey: "",
             sound_enabled: true,
+            suppress_browser_sync_sound: true,
             mute_sound_volume: 1.0,
             unmute_sound_volume: 1.0,
             autostart: false,
@@ -740,8 +818,11 @@ mod tests {
             input_count: 2,
             mute_sound_path: "",
             unmute_sound_path: "",
-            on_mute_command: "",
-            on_unmute_command: "",
+            on_mute_url: "",
+            on_unmute_url: "",
+            on_mute_body: "",
+            on_unmute_body: "",
+            websocket_port: "0",
             original,
             max_sound_bytes: 10_000_000,
         }
@@ -851,14 +932,18 @@ mod tests {
     fn build_hooks_are_preserved() {
         let orig = Config::default();
         let config = build_and_validate_config(&ValidateParams {
-            on_mute_command: "echo muted",
-            on_unmute_command: "echo unmuted",
+            on_mute_url: "https://example.com/mute",
+            on_unmute_url: "https://example.com/unmute",
+            on_mute_body: r#"{"muted":true}"#,
+            on_unmute_body: r#"{"muted":false}"#,
             ..default_test_params(&orig)
         })
         .expect("should be Ok");
 
-        assert_eq!(config.hooks.on_mute_command, "echo muted");
-        assert_eq!(config.hooks.on_unmute_command, "echo unmuted");
+        assert_eq!(config.hooks.on_mute_url, "https://example.com/mute");
+        assert_eq!(config.hooks.on_unmute_url, "https://example.com/unmute");
+        assert_eq!(config.hooks.on_mute_body, r#"{"muted":true}"#);
+        assert_eq!(config.hooks.on_unmute_body, r#"{"muted":false}"#);
     }
 
     // NOTE: Color conversion tests (hex_to_rgb, rgb_to_hex, roundtrips) removed —
@@ -1111,5 +1196,70 @@ mod tests {
         })
         .expect("should be Ok");
         assert!(config.keyboard.push_to_talk_hotkey.is_empty());
+    }
+
+    // ── WebSocket port ──
+
+    #[test]
+    fn build_valid_websocket_port() {
+        let orig = Config::default();
+        let config = build_and_validate_config(&ValidateParams {
+            websocket_port: "9736",
+            ..default_test_params(&orig)
+        })
+        .expect("should be Ok");
+        assert_eq!(config.system.websocket_port, 9736);
+    }
+
+    #[test]
+    fn build_websocket_port_zero_is_disabled() {
+        let orig = Config::default();
+        let config = build_and_validate_config(&ValidateParams {
+            websocket_port: "0",
+            ..default_test_params(&orig)
+        })
+        .expect("should be Ok");
+        assert_eq!(config.system.websocket_port, 0);
+    }
+
+    #[test]
+    fn build_websocket_port_empty_is_disabled() {
+        let orig = Config::default();
+        let config = build_and_validate_config(&ValidateParams {
+            websocket_port: "",
+            ..default_test_params(&orig)
+        })
+        .expect("should be Ok");
+        assert_eq!(config.system.websocket_port, 0);
+    }
+
+    #[test]
+    fn build_websocket_port_invalid_string() {
+        let orig = Config::default();
+        let result = build_and_validate_config(&ValidateParams {
+            websocket_port: "abc",
+            ..default_test_params(&orig)
+        });
+        assert!(result.is_err());
+        let errs = result.unwrap_err();
+        assert!(
+            errs.iter().any(|e| e.contains("browser sync port")),
+            "expected port parse error, got: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn build_websocket_port_privileged_rejected() {
+        let orig = Config::default();
+        let result = build_and_validate_config(&ValidateParams {
+            websocket_port: "80",
+            ..default_test_params(&orig)
+        });
+        assert!(result.is_err());
+        let errs = result.unwrap_err();
+        assert!(
+            errs.iter().any(|e| e.to_lowercase().contains("privileged")),
+            "expected privileged port error, got: {errs:?}"
+        );
     }
 }

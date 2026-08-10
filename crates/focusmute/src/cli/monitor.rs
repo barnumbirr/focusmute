@@ -150,11 +150,11 @@ pub(super) fn cmd_monitor(
     on_unmute: Option<&str>,
 ) -> Result<()> {
     let mut config = super::load_config(config_path);
-    if let Some(cmd) = on_mute {
-        config.hooks.on_mute_command = cmd.to_string();
+    if let Some(url) = on_mute {
+        config.hooks.on_mute_url = url.to_string();
     }
-    if let Some(cmd) = on_unmute {
-        config.hooks.on_unmute_command = cmd.to_string();
+    if let Some(url) = on_unmute {
+        config.hooks.on_unmute_url = url.to_string();
     }
     let mute_color = led::mute_color_or_default(&config);
 
@@ -245,13 +245,13 @@ mod tests {
     #[test]
     fn monitor_ctx_hook_overrides_apply() {
         let mut config = Config::default();
-        assert!(config.hooks.on_mute_command.is_empty());
+        assert!(config.hooks.on_mute_url.is_empty());
         // Simulate --on-mute override (same logic as cmd_monitor)
-        let on_mute = Some("echo muted");
-        if let Some(cmd) = on_mute {
-            config.hooks.on_mute_command = cmd.to_string();
+        let on_mute = Some("https://example.com/hook");
+        if let Some(url) = on_mute {
+            config.hooks.on_mute_url = url.to_string();
         }
-        assert_eq!(config.hooks.on_mute_command, "echo muted");
+        assert_eq!(config.hooks.on_mute_url, "https://example.com/hook");
     }
 
     #[test]
