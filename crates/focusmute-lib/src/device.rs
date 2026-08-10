@@ -800,7 +800,9 @@ mod linux_impl {
     use std::sync::atomic::{AtomicU16, Ordering};
     use std::time::Duration;
 
-    use nusb::transfer::Control;
+    use nusb::MaybeFuture;
+    use nusb::transfer::ControlIn;
+    use nusb::transfer::ControlOut;
     use nusb::transfer::ControlType;
     use nusb::transfer::Recipient;
 
@@ -839,15 +841,19 @@ mod linux_impl {
             windex: u16,
             data: &[u8],
         ) -> std::result::Result<(), String> {
-            let control = Control {
-                control_type: ControlType::Class,
-                recipient: Recipient::Interface,
-                request: brequest,
-                value: 0,
-                index: windex,
-            };
             interface
-                .control_out_blocking(control, data, Duration::from_millis(USB_TIMEOUT_MS))
+                .control_out(
+                    ControlOut {
+                        control_type: ControlType::Class,
+                        recipient: Recipient::Interface,
+                        request: brequest,
+                        value: 0,
+                        index: windex,
+                        data,
+                    },
+                    Duration::from_millis(USB_TIMEOUT_MS),
+                )
+                .wait()
                 .map_err(|e| format!("control_out(bRequest={brequest}): {e}"))?;
             Ok(())
         }
@@ -858,18 +864,20 @@ mod linux_impl {
             windex: u16,
             length: usize,
         ) -> std::result::Result<Vec<u8>, String> {
-            let control = Control {
-                control_type: ControlType::Class,
-                recipient: Recipient::Interface,
-                request: brequest,
-                value: 0,
-                index: windex,
-            };
-            let mut buf = vec![0u8; length];
-            let n = interface
-                .control_in_blocking(control, &mut buf, Duration::from_millis(USB_TIMEOUT_MS))
+            let buf = interface
+                .control_in(
+                    ControlIn {
+                        control_type: ControlType::Class,
+                        recipient: Recipient::Interface,
+                        request: brequest,
+                        value: 0,
+                        index: windex,
+                        length: length as u16,
+                    },
+                    Duration::from_millis(USB_TIMEOUT_MS),
+                )
+                .wait()
                 .map_err(|e| format!("control_in(bRequest={brequest}): {e}"))?;
-            buf.truncate(n);
             Ok(buf)
         }
 
@@ -983,6 +991,7 @@ mod linux_impl {
         fn open() -> Result<Self> {
             // Find device
             let device_info = nusb::list_devices()
+                .wait()
                 .map_err(|e| DeviceError::OpenFailed(format!("USB enumeration: {e}")))?
                 .find(|dev| dev.vendor_id() == FOCUSRITE_VID)
                 .ok_or(DeviceError::NotFound)?;
@@ -991,7 +1000,7 @@ mod linux_impl {
             let product = device_info.product_string().unwrap_or_default().to_string();
             let bus_path = format!(
                 "usb:{:03}/{:03}",
-                device_info.bus_number(),
+                device_info.busnum(),
                 device_info.device_address()
             );
 
@@ -1004,10 +1013,11 @@ mod linux_impl {
 
             let usb_device = device_info
                 .open()
+                .wait()
                 .map_err(|e| DeviceError::OpenFailed(format!("USB open: {e}")))?;
 
             // Claim interface (nusb auto-detaches kernel driver)
-            let interface = usb_device.claim_interface(iface_num).map_err(|e| {
+            let interface = usb_device.claim_interface(iface_num).wait().map_err(|e| {
                 DeviceError::OpenFailed(format!("claim interface {iface_num}: {e}"))
             })?;
 
@@ -1228,7 +1238,9 @@ fn enumerate_devices_windows() -> Vec<DiscoveredDevice> {
 fn enumerate_devices_linux() -> Vec<DiscoveredDevice> {
     use crate::protocol::FOCUSRITE_VID;
 
-    let Ok(devices) = nusb::list_devices() else {
+    use nusb::MaybeFuture;
+
+    let Ok(devices) = nusb::list_devices().wait() else {
         return Vec::new();
     };
 
@@ -1241,7 +1253,7 @@ fn enumerate_devices_linux() -> Vec<DiscoveredDevice> {
         .map(|dev| {
             let path = format!(
                 "usb:{:03}/{:03} [{:04x}:{:04x}]",
-                dev.bus_number(),
+                dev.busnum(),
                 dev.device_address(),
                 dev.vendor_id(),
                 dev.product_id(),
