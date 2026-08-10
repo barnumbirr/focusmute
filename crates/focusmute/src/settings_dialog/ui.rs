@@ -75,13 +75,13 @@ impl SettingsApp {
         cc: &eframe::CreationContext<'_>,
     ) -> Self {
         // Apply widget style customizations
-        let mut style = (*cc.egui_ctx.style()).clone();
+        let mut style = (*cc.egui_ctx.global_style()).clone();
         let corner_radius = egui::CornerRadius::same(4);
         style.visuals.widgets.noninteractive.corner_radius = corner_radius;
         style.visuals.widgets.inactive.corner_radius = corner_radius;
         style.visuals.widgets.active.corner_radius = corner_radius;
         style.visuals.widgets.hovered.corner_radius = corner_radius;
-        cc.egui_ctx.set_style(style);
+        cc.egui_ctx.set_global_style(style);
 
         let color_rgb = led::parse_color(&config.indicator.mute_color)
             .ok()
@@ -225,7 +225,11 @@ struct FormSnapshot {
 }
 
 impl eframe::App for SettingsApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // eframe 0.34: the root Ui replaces the Context parameter. Keep a
+        // `ctx` binding so viewport commands and &Context helpers read as before.
+        let ctx = ui.ctx().clone();
+        let ctx = &ctx;
         // Height of the button area below content (separator + padding + buttons).
         const BUTTON_AREA_HEIGHT: f32 = 54.0;
 
@@ -234,7 +238,7 @@ impl eframe::App for SettingsApp {
         let form_snap = self.form_snapshot();
 
         let mut content_bottom = 0.0_f32;
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show_inside(ui, |ui| {
             // ── Mute Indicator section ──
             section_frame(ui, "Mute Indicator", |ui| {
                 egui::Grid::new("mute_indicator_grid")

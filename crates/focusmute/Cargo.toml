@@ -30,13 +30,13 @@ ctrlc = "3"
 
 # Tray app dependencies — shared across Windows and Linux
 [target.'cfg(any(windows, target_os = "linux"))'.dependencies]
-tray-icon = "0.21"
-muda = "0.17"
-global-hotkey = "0.7"
+tray-icon = "0.24"
+muda = "0.19"
+global-hotkey = "0.8"
 image = { version = "0.25", default-features = false, features = ["png", "ico"] }
 rodio = { version = "0.22", default-features = false, features = ["wav", "playback"] }
 auto-launch = "0.6"
-eframe = { version = "0.33", default-features = false, features = ["glow", "default_fonts", "x11", "wayland"] }
+eframe = { version = "0.34", default-features = false, features = ["glow", "default_fonts", "x11", "wayland"] }
 rfd = "0.17"
 single-instance = "0.3"
 
