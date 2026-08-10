@@ -109,19 +109,20 @@ mod platform {
         /// Show a mute-state notification that replaces the previous one.
         pub fn show_mute_state(&self, body: &str) {
             let mut handle = self.handle.borrow_mut();
-            match handle.as_mut() {
-                Some(h) => {
-                    // Update existing notification in-place (D-Bus replaces_id).
-                    h.body(body);
-                    h.update();
+            if let Some(h) = handle.as_mut() {
+                // Update existing notification in-place (D-Bus replaces_id).
+                h.body(body);
+                match h.update() {
+                    Ok(_) => return,
+                    // Stale handle (e.g. the notification daemon restarted) —
+                    // fall through and show a fresh notification instead.
+                    Err(e) => log::warn!("[notification] update failed, reshowing: {e}"),
                 }
-                None => {
-                    // First notification — store handle for future replacements.
-                    match Self::build_notification(body).show() {
-                        Ok(h) => *handle = Some(h),
-                        Err(e) => log::warn!("[notification] failed: {e}"),
-                    }
-                }
+            }
+            // First notification (or stale handle) — store for future replacements.
+            match Self::build_notification(body).show() {
+                Ok(h) => *handle = Some(h),
+                Err(e) => log::warn!("[notification] failed: {e}"),
             }
         }
 
