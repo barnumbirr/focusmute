@@ -536,10 +536,13 @@ impl eframe::App for SettingsApp {
                             ui.add_space(2.0);
                             ui.checkbox(&mut self.suppress_browser_sync_sound, "Suppress sound on mute/unmute");
                             ui.add_space(2.0);
-                            ui.checkbox(&mut self.browser_sync_reverse, "Also mute/unmute the meeting (Google Meet)")
-                                .on_hover_text(
-                                    "Hotkey and tray mute changes click the meeting's own mute button",
-                                );
+                            ui.checkbox(
+                                &mut self.browser_sync_reverse,
+                                "Let FocusMute mute/unmute the meeting",
+                            )
+                            .on_hover_text(
+                                "Hotkey and tray mute changes click the meeting's own mute button (Google Meet, Microsoft Teams)",
+                            );
                             ui.add_space(2.0);
                             egui::Grid::new("browser_sync_grid")
                                 .num_columns(2)
