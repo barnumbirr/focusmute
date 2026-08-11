@@ -23,7 +23,7 @@ pub const METER_MAX: u32 = 4095;
 /// The out buffer passed to `transact` MUST include it — an undersized
 /// buffer makes the SwRoot driver stall ~1.6 s and answer with an error
 /// struct whose status code (2) is easily mistaken for meter data
-/// (probed on 2i2 hardware, 2026-08-11).
+/// (probed on 2i2 hardware).
 const RESPONSE_HEADER: usize = 8;
 
 /// Read `count` live meter levels from the device.

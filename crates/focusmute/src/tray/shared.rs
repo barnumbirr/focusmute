@@ -682,7 +682,7 @@ mod tests {
         }
     }
 
-    // ── Burst coalescing (regression for the 2026-06-10 join-screen flicker) ──
+    // ── Burst coalescing (regression for the Meet join-screen flicker) ──
 
     /// The logged incident: muted user joins, Meet flickers false→true→false.
     /// Exactly one unmute must fire — the transient "muted" must not act.
@@ -764,7 +764,7 @@ mod tests {
         assert!(!pending);
     }
 
-    // ── Net-zero flicker reconciliation (regression for the 2026-06-15 bug) ──
+    // ── Net-zero flicker reconciliation ──
     //
     // `handle_browser_mute` clears `browser_sync_pending` when the browser's
     // net target already equals the committed (displayed) state, because no
@@ -784,7 +784,7 @@ mod tests {
         }
     }
 
-    /// The 2026-06-15 incident: an unmuted user's Meet join flickers
+    /// The incident this guards against: an unmuted user's Meet join flickers
     /// mute→unmute across two drain passes. The debouncer never confirms the
     /// blip, so the committed state stays unmuted and no `MutePoll` clears the
     /// flag. The flag must not survive the burst, or the next user mute is
