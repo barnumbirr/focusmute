@@ -45,8 +45,10 @@ pub struct IndicatorConfig {
 
     /// Input level above which muted talk triggers blinking, in the
     /// device's raw linear meter units: 0 = silence, 4095 = full scale.
-    /// Quiet-room ambient reads single digits; the default (~-24 dBFS)
-    /// catches normal speech without firing on room noise.
+    /// Measured on a 2i2: quiet-room ambient reads single digits, speech
+    /// peaks in the hundreds — the default sits well clear of both. The
+    /// settings dialog exposes this as Low/Medium/High presets (500/250/100);
+    /// this key is the escape hatch for setups outside those.
     #[serde(default = "default_talk_threshold")]
     pub talk_threshold: u32,
 }

@@ -16,6 +16,23 @@ pub(crate) enum ColorDirty {
     Picker,
 }
 
+/// Muted-talk blink sensitivity presets shown in the settings dialog,
+/// mapped to raw `talk_threshold` meter values (higher sensitivity =
+/// lower threshold). The raw `[indicator].talk_threshold` TOML key
+/// remains the escape hatch for setups outside these presets.
+const TALK_SENSITIVITY_PRESETS: &[(&str, u32)] = &[("Low", 500), ("Medium", 250), ("High", 100)];
+
+/// Display text for the sensitivity combo: the preset name when the current
+/// threshold matches one, otherwise "Custom (n)" — a hand-edited TOML value
+/// is shown as-is and never silently replaced.
+fn sensitivity_text(threshold: u32) -> String {
+    TALK_SENSITIVITY_PRESETS
+        .iter()
+        .find(|(_, v)| *v == threshold)
+        .map(|(name, _)| name.to_string())
+        .unwrap_or_else(|| format!("Custom ({threshold})"))
+}
+
 pub struct SettingsApp {
     // ── Form state ──
     color_text: String,
@@ -312,10 +329,20 @@ impl eframe::App for SettingsApp {
                         ui.end_row();
 
                         if self.blink_on_talk {
-                            ui.label("Talk threshold").on_hover_text(
-                                "Raw input level that counts as talking (0 = silence, 4095 = full scale; ambient noise reads single digits)",
+                            ui.label("Sensitivity").on_hover_text(
+                                "How loud you need to be for the blink to trigger",
                             );
-                            ui.add(egui::Slider::new(&mut self.talk_threshold, 0..=4095));
+                            egui::ComboBox::from_id_salt("talk_sensitivity_combo")
+                                .selected_text(sensitivity_text(self.talk_threshold))
+                                .show_ui(ui, |ui| {
+                                    for &(name, value) in TALK_SENSITIVITY_PRESETS {
+                                        ui.selectable_value(
+                                            &mut self.talk_threshold,
+                                            value,
+                                            name,
+                                        );
+                                    }
+                                });
                             ui.end_row();
                         }
                     });
@@ -845,6 +872,25 @@ fn browse_wav_file() -> Option<String> {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    #[test]
+    fn sensitivity_presets_are_valid_and_ordered() {
+        // All presets within the 12-bit meter range, and "higher sensitivity"
+        // means a strictly lower threshold.
+        let values: Vec<u32> = TALK_SENSITIVITY_PRESETS.iter().map(|(_, v)| *v).collect();
+        assert!(values.iter().all(|&v| v <= 4095));
+        assert!(values.windows(2).all(|w| w[0] > w[1]));
+        // The Medium preset is the shipped default.
+        assert!(TALK_SENSITIVITY_PRESETS.contains(&("Medium", 250)));
+    }
+
+    #[test]
+    fn sensitivity_text_names_presets_and_preserves_custom() {
+        assert_eq!(sensitivity_text(500), "Low");
+        assert_eq!(sensitivity_text(250), "Medium");
+        assert_eq!(sensitivity_text(100), "High");
+        assert_eq!(sensitivity_text(300), "Custom (300)");
+    }
 
     /// Default valid params — tests override only the fields they care about.
     fn default_test_params(original: &Config) -> ValidateParams<'_> {
