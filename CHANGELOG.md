@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Blink the mute indicator when you talk while muted — opt-in via `[indicator].blink_on_talk` with a configurable `talk_threshold` (0–4095); reads the device's live input meters (~11 Hz) only while muted
+
 ### Changed
 
 - Dependency refresh across the tree: GUI stack on egui/eframe 0.34, tray-icon 0.24, muda 0.19, global-hotkey 0.8; Linux USB stack on nusb 0.2; toml 0.9, base64 0.23, auto-launch 0.6, winreg 0.56, notify-rust 4.18

@@ -227,6 +227,7 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
     let mut ptt_active = false;
     let mut ptt_noop_logged = false;
     let mut browser_sync_pending = false;
+    let mut blink = super::blink::BlinkState::new();
 
     loop {
         if !RUNNING.load(Ordering::SeqCst) {
@@ -312,6 +313,39 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
                 state.indicator.is_muted(),
                 &mut browser_sync_pending,
             );
+        }
+
+        // 3c. Muted-talk blink — rides the ~50 ms loop wake; reads meters at
+        // most every METER_INTERVAL while muted with the feature enabled.
+        if state.config.indicator.blink_on_talk
+            && state.indicator.is_muted()
+            && let Some(ref dev) = device
+        {
+            let now = std::time::Instant::now();
+            let talking = if blink.meter_due(now) {
+                blink.note_meter_read(now);
+                match focusmute_lib::meter::read_meters(dev, focusmute_lib::meter::METER_COUNT) {
+                    Ok(levels) => Some(
+                        focusmute_lib::meter::max_input_level(
+                            &levels,
+                            &state.indicator.strategy().input_indices,
+                        ) >= state.config.indicator.talk_threshold,
+                    ),
+                    Err(e) => {
+                        log::debug!("[blink] meter read failed: {e}");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            if let Some(action) = blink.advance(now, talking) {
+                apply_blink_action(dev, &state, action);
+            }
+        } else if let Some(action) = blink.reset(state.indicator.is_muted()) {
+            if let Some(ref dev) = device {
+                apply_blink_action(dev, &state, action);
+            }
         }
 
         // 4. Menu events
@@ -448,6 +482,29 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
 ///
 /// `committed_muted` is the debouncer's confirmed (displayed) mute state — the
 /// synchronous source of truth for whether a UI transition will fire, unlike
+/// Perform a blink LED action: the off-phase blanks the indicator's number
+/// LEDs, the solid phase repaints the regular mute indicator. Failures are
+/// debug-logged only — a missed blink frame is cosmetic, and device loss is
+/// detected by the regular poll path.
+fn apply_blink_action(
+    device: &impl ScarlettDevice,
+    state: &TrayState,
+    action: super::blink::LedAction,
+) {
+    let result = match action {
+        super::blink::LedAction::Solid => state.indicator.apply_mute(device),
+        super::blink::LedAction::Off => state
+            .indicator
+            .strategy()
+            .number_leds
+            .iter()
+            .try_for_each(|&led| focusmute_lib::led::set_single_led(device, led, 0)),
+    };
+    if let Err(e) = result {
+        log::debug!("[blink] LED update failed: {e}");
+    }
+}
+
 /// the monitor's callback-cached `is_muted()` which lags `set_muted`.
 ///
 /// `browser_sync_pending` is armed to suppress the beep of a browser-caused UI

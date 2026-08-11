@@ -8,6 +8,7 @@ pub mod error;
 pub mod hooks;
 pub mod layout;
 pub mod led;
+pub mod meter;
 pub mod models;
 pub mod monitor;
 pub mod offsets;

@@ -38,6 +38,15 @@ pub struct IndicatorConfig {
     /// Example in TOML: `[indicator.input_colors]` / `1 = "#FF0000"` / `2 = "#0000FF"`
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub input_colors: HashMap<String, String>,
+
+    /// Blink the mute indicator when you talk while muted. Default: false.
+    #[serde(default)]
+    pub blink_on_talk: bool,
+
+    /// Input level (0–4095) above which muted talk triggers blinking.
+    /// Meters are 12-bit; the default is a conservative speech threshold.
+    #[serde(default = "default_talk_threshold")]
+    pub talk_threshold: u32,
 }
 
 impl Default for IndicatorConfig {
@@ -46,6 +55,8 @@ impl Default for IndicatorConfig {
             mute_color: default_mute_color(),
             mute_inputs: default_mute_inputs(),
             input_colors: HashMap::new(),
+            blink_on_talk: false,
+            talk_threshold: default_talk_threshold(),
         }
     }
 }
@@ -194,6 +205,9 @@ fn default_sound_volume() -> f32 {
 fn default_log_level() -> String {
     "info".into()
 }
+fn default_talk_threshold() -> u32 {
+    400
+}
 fn default_browser_sync_port() -> u16 {
     9736
 }
@@ -264,6 +278,7 @@ impl From<LegacyConfig> for Config {
                 mute_color: legacy.mute_color,
                 mute_inputs: legacy.mute_inputs,
                 input_colors: legacy.input_colors,
+                ..Default::default()
             },
             keyboard: KeyboardConfig {
                 hotkey: legacy.hotkey,
@@ -337,6 +352,8 @@ pub enum ValidationError {
     InvalidLogLevel(String),
     /// The browser sync port is a privileged port (1–1023).
     InvalidWebSocketPort(u16),
+    /// The `talk_threshold` field exceeds the 12-bit meter range (0–4095).
+    InvalidTalkThreshold(u32),
 }
 
 impl fmt::Display for ValidationError {
@@ -364,6 +381,12 @@ impl fmt::Display for ValidationError {
                 write!(
                     f,
                     "Browser sync port {port} is privileged (1–1023). Use a port >= 1024, or 0 to disable"
+                )
+            }
+            ValidationError::InvalidTalkThreshold(value) => {
+                write!(
+                    f,
+                    "Talk threshold {value} is out of range (meters are 12-bit: 0–4095)"
                 )
             }
         }
@@ -615,6 +638,12 @@ impl Config {
         if self.system.browser_sync_port > 0 && self.system.browser_sync_port < 1024 {
             errors.push(ValidationError::InvalidWebSocketPort(
                 self.system.browser_sync_port,
+            ));
+        }
+
+        if self.indicator.talk_threshold > crate::meter::METER_MAX {
+            errors.push(ValidationError::InvalidTalkThreshold(
+                self.indicator.talk_threshold,
             ));
         }
 
@@ -976,6 +1005,7 @@ on_unmute_command = "echo u"
                     ("1".into(), "#FF0000".into()),
                     ("2".into(), "#0000FF".into()),
                 ]),
+                ..Default::default()
             },
             keyboard: KeyboardConfig {
                 hotkey: "Alt+M".into(),
@@ -1632,6 +1662,7 @@ on_unmute_command = "echo u"
                     ("1".into(), "#FF0000".into()),
                     ("2".into(), "#0000FF".into()),
                 ]),
+                ..Default::default()
             },
             keyboard: KeyboardConfig {
                 hotkey: "Alt+M".into(),
@@ -2054,6 +2085,35 @@ autostart = false
         let (config, warnings) = Config::load_from(&path);
         assert!(warnings.is_empty());
         assert_eq!(config.system.log_level, "info");
+    }
+
+    // ── Talk threshold ──
+
+    #[test]
+    fn talk_threshold_defaults() {
+        let config = Config::default();
+        assert!(!config.indicator.blink_on_talk);
+        assert_eq!(config.indicator.talk_threshold, 400);
+    }
+
+    #[test]
+    fn validate_talk_threshold_in_range_ok() {
+        let mut c = Config::default();
+        c.indicator.talk_threshold = 4095;
+        assert!(c.validate(None, 10_000_000).is_ok());
+    }
+
+    #[test]
+    fn validate_talk_threshold_out_of_range() {
+        let mut c = Config::default();
+        c.indicator.talk_threshold = 4096;
+        let errors = c.validate(None, 10_000_000).unwrap_err();
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, ValidationError::InvalidTalkThreshold(4096))),
+            "errors: {errors:?}"
+        );
     }
 
     // ── WebSocket port ──

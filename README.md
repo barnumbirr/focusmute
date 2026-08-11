@@ -7,6 +7,7 @@ FocusMute monitors your system microphone's mute state and reflects it on your F
 ## Features
 
 - Global hotkey toggle (default: Ctrl+Shift+M) and push-to-talk hotkey, with sound feedback
+- Blink the mute indicator when you talk while muted (opt-in, configurable threshold)
 - Configurable mute color per input (any hex color or named color)
 - Auto-reconnect on device disconnect and graceful startup without device
 - Schema-driven multi-model support (auto-discovers unknown Scarlett 4th Gen devices)
@@ -150,6 +151,8 @@ on_unmute_body = ""
 | `[system].device_serial` | `""` | Preferred device serial (empty = auto-select first) |
 | `[system].notifications_enabled` | `false` | Show desktop notification on mute/unmute |
 | `[system].log_level` | `"info"` | Log level: error, warn, info, debug, trace |
+| `[indicator].blink_on_talk` | `false` | Blink the mute indicator when input level exceeds `talk_threshold` while muted |
+| `[indicator].talk_threshold` | `400` | Input level (0–4095) that counts as talking |
 | `[system].browser_sync_port` | `0` | Port for browser extension sync (0 = disabled, e.g. 9736; must be >= 1024) |
 | `[hooks].on_mute_url` | `""` | Webhook URL to POST on mute (empty = disabled) |
 | `[hooks].on_unmute_url` | `""` | Webhook URL to POST on unmute (empty = disabled) |

@@ -29,6 +29,9 @@ pub struct SettingsApp {
     mute_inputs_items: Vec<String>,
     input_count: usize,
 
+    blink_on_talk: bool,
+    talk_threshold: u32,
+
     sound_enabled: bool,
     suppress_browser_sync_sound: bool,
     mute_sound_volume: f32,
@@ -101,6 +104,9 @@ impl SettingsApp {
             mute_inputs_items,
             input_count,
 
+            blink_on_talk: config.indicator.blink_on_talk,
+            talk_threshold: config.indicator.talk_threshold,
+
             sound_enabled: config.sound.sound_enabled,
             suppress_browser_sync_sound: config.sound.suppress_browser_sync_sound,
             mute_sound_volume: config.sound.mute_sound_volume,
@@ -157,6 +163,8 @@ impl SettingsApp {
             on_mute_body: &self.on_mute_body,
             on_unmute_body: &self.on_unmute_body,
             browser_sync_port: &self.browser_sync_port,
+            blink_on_talk: self.blink_on_talk,
+            talk_threshold: self.talk_threshold,
             original: &self.original,
             max_sound_bytes: MAX_SOUND_FILE_BYTES,
         }) {
@@ -196,6 +204,8 @@ impl SettingsApp {
             on_mute_body: self.on_mute_body.clone(),
             on_unmute_body: self.on_unmute_body.clone(),
             browser_sync_port: self.browser_sync_port.clone(),
+            blink_on_talk: self.blink_on_talk,
+            talk_threshold: self.talk_threshold,
         }
     }
 }
@@ -222,6 +232,8 @@ struct FormSnapshot {
     on_mute_body: String,
     on_unmute_body: String,
     browser_sync_port: String,
+    blink_on_talk: bool,
+    talk_threshold: u32,
 }
 
 impl eframe::App for SettingsApp {
@@ -286,6 +298,21 @@ impl eframe::App for SettingsApp {
                             }
                         });
                         ui.end_row();
+
+                        // Blink-on-talk row
+                        ui.label("Blink on talk").on_hover_text(
+                            "Blink the mute indicator when you talk while muted",
+                        );
+                        ui.checkbox(&mut self.blink_on_talk, "");
+                        ui.end_row();
+
+                        if self.blink_on_talk {
+                            ui.label("Talk threshold").on_hover_text(
+                                "Input level (0–4095) that counts as talking",
+                            );
+                            ui.add(egui::Slider::new(&mut self.talk_threshold, 0..=4095));
+                            ui.end_row();
+                        }
                     });
             });
 
@@ -623,6 +650,8 @@ pub(crate) struct ValidateParams<'a> {
     pub on_mute_body: &'a str,
     pub on_unmute_body: &'a str,
     pub browser_sync_port: &'a str,
+    pub blink_on_talk: bool,
+    pub talk_threshold: u32,
     pub original: &'a Config,
     pub max_sound_bytes: u64,
 }
@@ -661,6 +690,8 @@ pub(crate) fn build_and_validate_config(p: &ValidateParams<'_>) -> Result<Config
             mute_color: color_str,
             mute_inputs,
             input_colors: p.original.indicator.input_colors.clone(),
+            blink_on_talk: p.blink_on_talk,
+            talk_threshold: p.talk_threshold,
         },
         keyboard: focusmute_lib::config::KeyboardConfig {
             hotkey: p.hotkey.to_string(),
@@ -811,6 +842,8 @@ mod tests {
             color_rgb: [1.0, 0.0, 0.0],
             hotkey: "Ctrl+Shift+M",
             ptt_hotkey: "",
+            blink_on_talk: false,
+            talk_threshold: 400,
             sound_enabled: true,
             suppress_browser_sync_sound: true,
             mute_sound_volume: 1.0,
