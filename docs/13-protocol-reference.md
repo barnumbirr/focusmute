@@ -21,6 +21,22 @@ struct scarlett2_usb_packet {
 };
 ```
 
+### Transact Response Header (SwRoot)
+
+Every SwRoot TRANSACT response is prefixed by an 8-byte header (this is the
+"8-byte transact header" referenced throughout this document):
+
+```
+offset 0: u32 LE  status      (0 = success; 2 observed for undersized buffer)
+offset 4: u32 LE  byte_count  (payload bytes that follow)
+```
+
+The out buffer passed to the driver must be sized `8 + payload`; parsers skip
+the header and read `byte_count` bytes. **An undersized buffer does not fail
+fast**: the SwRoot driver stalls ~1.6 s and then returns an error struct whose
+leading `status` word is easily mistaken for payload data (probed on 2i2
+hardware — see `focusmute-lib/src/meter.rs`).
+
 ### USB Control Transfer Parameters
 
 Requests use control endpoint 0 on the vendor-specific interface (`bInterfaceClass == 255`):

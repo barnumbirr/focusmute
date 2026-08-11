@@ -103,6 +103,8 @@ Created with defaults on first run. Example:
 [indicator]
 mute_color = "#FF0000"
 mute_inputs = "all"
+blink_on_talk = false
+talk_threshold = 250
 # Per-input colors (optional):
 # [indicator.input_colors]
 # 1 = "#FF0000"
@@ -126,6 +128,7 @@ device_serial = ""
 notifications_enabled = false
 log_level = "info"
 # browser_sync_port = 9736
+# browser_sync_reverse = true
 
 [hooks]
 on_mute_url = ""
