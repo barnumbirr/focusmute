@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Blink the mute indicator when you talk while muted — opt-in via `[indicator].blink_on_talk` with a configurable `talk_threshold` (0–4095); reads the device's live input meters (~11 Hz) only while muted
-- Reverse browser sync — opt-in via `[system].browser_sync_reverse`: hotkey/tray mute changes are mirrored into browser meetings (extension clicks Google Meet's mute button). New `poll_actions` message on the browser sync listener; browser-originated transitions are excluded to prevent echo loops
+- Reverse browser sync — opt-in via `[system].browser_sync_reverse`: hotkey/tray mute changes are mirrored into browser meetings (the extension clicks Meet's/Teams' mute button). New `poll_actions` message on the browser sync listener; browser-originated transitions are excluded to prevent echo loops
 
 ### Changed
 

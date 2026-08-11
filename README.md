@@ -154,7 +154,7 @@ on_unmute_body = ""
 | `[indicator].blink_on_talk` | `false` | Blink the mute indicator when input level exceeds `talk_threshold` while muted |
 | `[indicator].talk_threshold` | `400` | Input level (0–4095) that counts as talking |
 | `[system].browser_sync_port` | `0` | Port for browser extension sync (0 = disabled, e.g. 9736; must be >= 1024) |
-| `[system].browser_sync_reverse` | `false` | Mirror hotkey/tray mute changes into browser meetings (extension clicks Google Meet's mute button) |
+| `[system].browser_sync_reverse` | `false` | Mirror hotkey/tray mute changes into browser meetings (extension clicks the meeting's mute button) |
 | `[hooks].on_mute_url` | `""` | Webhook URL to POST on mute (empty = disabled) |
 | `[hooks].on_unmute_url` | `""` | Webhook URL to POST on unmute (empty = disabled) |
 | `[hooks].on_mute_body` | `""` | Custom JSON body for mute webhook (empty = `{"event":"mute"}`) |
