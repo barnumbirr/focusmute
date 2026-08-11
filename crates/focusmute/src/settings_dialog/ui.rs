@@ -313,7 +313,7 @@ impl eframe::App for SettingsApp {
 
                         if self.blink_on_talk {
                             ui.label("Talk threshold").on_hover_text(
-                                "Input level (0–4095) that counts as talking",
+                                "Raw input level that counts as talking (0 = silence, 4095 = full scale; ambient noise reads single digits)",
                             );
                             ui.add(egui::Slider::new(&mut self.talk_threshold, 0..=4095));
                             ui.end_row();
@@ -856,7 +856,7 @@ mod tests {
             ptt_hotkey: "",
             browser_sync_reverse: false,
             blink_on_talk: false,
-            talk_threshold: 400,
+            talk_threshold: 250,
             sound_enabled: true,
             suppress_browser_sync_sound: true,
             mute_sound_volume: 1.0,

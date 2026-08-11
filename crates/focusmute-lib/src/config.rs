@@ -43,8 +43,10 @@ pub struct IndicatorConfig {
     #[serde(default)]
     pub blink_on_talk: bool,
 
-    /// Input level (0–4095) above which muted talk triggers blinking.
-    /// Meters are 12-bit; the default is a conservative speech threshold.
+    /// Input level above which muted talk triggers blinking, in the
+    /// device's raw linear meter units: 0 = silence, 4095 = full scale.
+    /// Quiet-room ambient reads single digits; the default (~-24 dBFS)
+    /// catches normal speech without firing on room noise.
     #[serde(default = "default_talk_threshold")]
     pub talk_threshold: u32,
 }
@@ -213,7 +215,7 @@ fn default_log_level() -> String {
     "info".into()
 }
 fn default_talk_threshold() -> u32 {
-    400
+    250
 }
 fn default_browser_sync_port() -> u16 {
     9736
@@ -2101,7 +2103,7 @@ autostart = false
     fn talk_threshold_defaults() {
         let config = Config::default();
         assert!(!config.indicator.blink_on_talk);
-        assert_eq!(config.indicator.talk_threshold, 400);
+        assert_eq!(config.indicator.talk_threshold, 250);
     }
 
     #[test]
