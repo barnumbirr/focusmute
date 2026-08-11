@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Dependency refresh across the tree: GUI stack on egui/eframe 0.34, tray-icon 0.24, muda 0.19, global-hotkey 0.8; Linux USB stack on nusb 0.2; toml 0.9, base64 0.23, auto-launch 0.6, winreg 0.56, notify-rust 4.18
+- `[system].websocket_port` renamed to `browser_sync_port` (the listener has been plain HTTP since 0.9.1). Old key still read; configs rewrite to the new name on next save
 - A mute-state notification whose in-place update fails (e.g. after the notification daemon restarts) is re-shown as a fresh notification instead of failing silently from then on
 
 ## [0.9.1] - 2026-08-10

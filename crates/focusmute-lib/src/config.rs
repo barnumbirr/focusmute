@@ -137,8 +137,8 @@ pub struct SystemConfig {
     /// When the field is absent from the config file, defaults to 9736 for
     /// backward compatibility. When nonzero, a localhost HTTP server listens
     /// on this port for mute state messages from the browser extension.
-    #[serde(default = "default_websocket_port")]
-    pub websocket_port: u16,
+    #[serde(default = "default_browser_sync_port", alias = "websocket_port")]
+    pub browser_sync_port: u16,
 }
 
 impl Default for SystemConfig {
@@ -148,7 +148,7 @@ impl Default for SystemConfig {
             device_serial: String::new(),
             notifications_enabled: false,
             log_level: default_log_level(),
-            websocket_port: 0,
+            browser_sync_port: 0,
         }
     }
 }
@@ -194,7 +194,7 @@ fn default_sound_volume() -> f32 {
 fn default_log_level() -> String {
     "info".into()
 }
-fn default_websocket_port() -> u16 {
+fn default_browser_sync_port() -> u16 {
     9736
 }
 
@@ -282,7 +282,7 @@ impl From<LegacyConfig> for Config {
                 device_serial: legacy.device_serial,
                 notifications_enabled: legacy.notifications_enabled,
                 log_level: default_log_level(),
-                websocket_port: default_websocket_port(),
+                browser_sync_port: default_browser_sync_port(),
             },
             hooks: HooksConfig {
                 on_mute_url: legacy.on_mute_command,
@@ -612,9 +612,9 @@ impl Config {
         }
 
         // Validate WebSocket port (0 = disabled, 1–1023 = privileged = rejected)
-        if self.system.websocket_port > 0 && self.system.websocket_port < 1024 {
+        if self.system.browser_sync_port > 0 && self.system.browser_sync_port < 1024 {
             errors.push(ValidationError::InvalidWebSocketPort(
-                self.system.websocket_port,
+                self.system.browser_sync_port,
             ));
         }
 
@@ -832,6 +832,24 @@ notifications_enabled = true
     }
 
     #[test]
+    fn legacy_websocket_port_key_maps_to_browser_sync_port() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            r##"
+[system]
+websocket_port = 9736
+"##,
+        )
+        .unwrap();
+
+        let (c, warnings) = Config::load_from(&path);
+        assert!(warnings.is_empty(), "warnings: {warnings:?}");
+        assert_eq!(c.system.browser_sync_port, 9736);
+    }
+
+    #[test]
     fn legacy_config_migrated_on_save() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
@@ -975,7 +993,7 @@ on_unmute_command = "echo u"
                 autostart: true,
                 device_serial: "ABC123".into(),
                 notifications_enabled: true,
-                websocket_port: 9736,
+                browser_sync_port: 9736,
                 ..Default::default()
             },
             hooks: HooksConfig {
@@ -1014,7 +1032,10 @@ on_unmute_command = "echo u"
             loaded.system.notifications_enabled,
             config.system.notifications_enabled
         );
-        assert_eq!(loaded.system.websocket_port, config.system.websocket_port);
+        assert_eq!(
+            loaded.system.browser_sync_port,
+            config.system.browser_sync_port
+        );
     }
 
     // ── parse_mute_inputs ──
@@ -2038,16 +2059,16 @@ autostart = false
     // ── WebSocket port ──
 
     #[test]
-    fn websocket_port_defaults_to_0() {
+    fn browser_sync_port_defaults_to_0() {
         let config = Config::default();
-        assert_eq!(config.system.websocket_port, 0);
+        assert_eq!(config.system.browser_sync_port, 0);
     }
 
     #[test]
-    fn validate_websocket_port_zero_is_ok() {
+    fn validate_browser_sync_port_zero_is_ok() {
         let c = Config {
             system: SystemConfig {
-                websocket_port: 0,
+                browser_sync_port: 0,
                 ..Default::default()
             },
             ..Config::default()
@@ -2056,11 +2077,11 @@ autostart = false
     }
 
     #[test]
-    fn validate_websocket_port_valid() {
+    fn validate_browser_sync_port_valid() {
         for port in [1024, 9736, 65535] {
             let c = Config {
                 system: SystemConfig {
-                    websocket_port: port,
+                    browser_sync_port: port,
                     ..Default::default()
                 },
                 ..Config::default()
@@ -2073,11 +2094,11 @@ autostart = false
     }
 
     #[test]
-    fn validate_websocket_port_privileged_rejected() {
+    fn validate_browser_sync_port_privileged_rejected() {
         for port in [1, 80, 443, 1023] {
             let c = Config {
                 system: SystemConfig {
-                    websocket_port: port,
+                    browser_sync_port: port,
                     ..Default::default()
                 },
                 ..Config::default()
@@ -2092,21 +2113,21 @@ autostart = false
     }
 
     #[test]
-    fn websocket_port_roundtrip() {
+    fn browser_sync_port_roundtrip() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
 
         let mut config = Config::default();
-        config.system.websocket_port = 9736;
+        config.system.browser_sync_port = 9736;
         config.save_to(&path).unwrap();
 
         let (loaded, warnings) = Config::load_from(&path);
         assert!(warnings.is_empty());
-        assert_eq!(loaded.system.websocket_port, 9736);
+        assert_eq!(loaded.system.browser_sync_port, 9736);
     }
 
     #[test]
-    fn websocket_port_missing_field_defaults_to_serde_9736() {
+    fn browser_sync_port_missing_field_defaults_to_serde_9736() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
         std::fs::write(
@@ -2121,6 +2142,6 @@ log_level = "info"
 
         let (config, warnings) = Config::load_from(&path);
         assert!(warnings.is_empty());
-        assert_eq!(config.system.websocket_port, 9736);
+        assert_eq!(config.system.browser_sync_port, 9736);
     }
 }

@@ -11,7 +11,7 @@ FocusMute monitors your system microphone's mute state and reflects it on your F
 - Auto-reconnect on device disconnect and graceful startup without device
 - Schema-driven multi-model support (auto-discovers unknown Scarlett 4th Gen devices)
 - Settings GUI (tray app) and TOML config file
-- Browser extension syncs Google Meet mute state to LEDs ([focusmute-extension](https://github.com/barnumbirr/focusmute-extension))
+- Browser extension syncs Google Meet and Microsoft Teams mute state to LEDs ([focusmute-extension](https://github.com/barnumbirr/focusmute-extension))
 - Extensible via webhooks (HTTP POST on mute/unmute), desktop notifications, and device serial targeting
 
 ## Supported Devices
@@ -124,7 +124,7 @@ autostart = false
 device_serial = ""
 notifications_enabled = false
 log_level = "info"
-# websocket_port = 9736
+# browser_sync_port = 9736
 
 [hooks]
 on_mute_url = ""
@@ -150,7 +150,7 @@ on_unmute_body = ""
 | `[system].device_serial` | `""` | Preferred device serial (empty = auto-select first) |
 | `[system].notifications_enabled` | `false` | Show desktop notification on mute/unmute |
 | `[system].log_level` | `"info"` | Log level: error, warn, info, debug, trace |
-| `[system].websocket_port` | `0` | Port for browser extension sync (0 = disabled, e.g. 9736; must be >= 1024) |
+| `[system].browser_sync_port` | `0` | Port for browser extension sync (0 = disabled, e.g. 9736; must be >= 1024) |
 | `[hooks].on_mute_url` | `""` | Webhook URL to POST on mute (empty = disabled) |
 | `[hooks].on_unmute_url` | `""` | Webhook URL to POST on unmute (empty = disabled) |
 | `[hooks].on_mute_body` | `""` | Custom JSON body for mute webhook (empty = `{"event":"mute"}`) |

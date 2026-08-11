@@ -39,7 +39,7 @@ pub struct SettingsChanges {
     pub new_ptt_str: String,
     pub log_level_changed: bool,
     pub new_log_level: String,
-    pub websocket_port_changed: bool,
+    pub browser_sync_port_changed: bool,
 }
 
 // ── Audio/hotkey resource bundle ──
@@ -366,8 +366,8 @@ impl TrayState {
         let new_ptt_str = new_config.keyboard.push_to_talk_hotkey.clone();
         let log_level_changed = new_config.system.log_level != self.config.system.log_level;
         let new_log_level = new_config.system.log_level.clone();
-        let websocket_port_changed =
-            new_config.system.websocket_port != self.config.system.websocket_port;
+        let browser_sync_port_changed =
+            new_config.system.browser_sync_port != self.config.system.browser_sync_port;
 
         let warnings = self.apply_config(new_config, device);
 
@@ -381,7 +381,7 @@ impl TrayState {
             new_ptt_str,
             log_level_changed,
             new_log_level,
-            websocket_port_changed,
+            browser_sync_port_changed,
         }
     }
 
@@ -454,7 +454,7 @@ pub fn handle_menu_event(
                 log::info!("[settings] log level changing to {}", changes.new_log_level);
                 crate::set_log_level(&changes.new_log_level);
             }
-            if changes.websocket_port_changed {
+            if changes.browser_sync_port_changed {
                 log::info!("[settings] browser sync port changed — restart required");
                 crate::notification::Notifier::show_oneshot(
                     "Browser sync port changed. Restart FocusMute for the change to take effect.",

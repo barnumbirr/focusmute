@@ -45,7 +45,7 @@ pub struct SettingsApp {
     on_mute_body: String,
     on_unmute_body: String,
 
-    websocket_port: String,
+    browser_sync_port: String,
 
     // ── Sound preview ──
     preview_player: SoundPreviewPlayer,
@@ -117,7 +117,7 @@ impl SettingsApp {
             on_mute_body: config.hooks.on_mute_body.clone(),
             on_unmute_body: config.hooks.on_unmute_body.clone(),
 
-            websocket_port: config.system.websocket_port.to_string(),
+            browser_sync_port: config.system.browser_sync_port.to_string(),
 
             preview_player: SoundPreviewPlayer::new(),
 
@@ -156,7 +156,7 @@ impl SettingsApp {
             on_unmute_url: &self.on_unmute_url,
             on_mute_body: &self.on_mute_body,
             on_unmute_body: &self.on_unmute_body,
-            websocket_port: &self.websocket_port,
+            browser_sync_port: &self.browser_sync_port,
             original: &self.original,
             max_sound_bytes: MAX_SOUND_FILE_BYTES,
         }) {
@@ -195,7 +195,7 @@ impl SettingsApp {
             on_unmute_url: self.on_unmute_url.clone(),
             on_mute_body: self.on_mute_body.clone(),
             on_unmute_body: self.on_unmute_body.clone(),
-            websocket_port: self.websocket_port.clone(),
+            browser_sync_port: self.browser_sync_port.clone(),
         }
     }
 }
@@ -221,7 +221,7 @@ struct FormSnapshot {
     on_unmute_url: String,
     on_mute_body: String,
     on_unmute_body: String,
-    websocket_port: String,
+    browser_sync_port: String,
 }
 
 impl eframe::App for SettingsApp {
@@ -484,7 +484,7 @@ impl eframe::App for SettingsApp {
                                 .show(ui, |ui| {
                                     ui.label("Port");
                                     ui.add(
-                                        egui::TextEdit::singleline(&mut self.websocket_port)
+                                        egui::TextEdit::singleline(&mut self.browser_sync_port)
                                             .desired_width(120.0)
                                             .hint_text("0 = disabled, e.g. 9736"),
                                     );
@@ -622,7 +622,7 @@ pub(crate) struct ValidateParams<'a> {
     pub on_unmute_url: &'a str,
     pub on_mute_body: &'a str,
     pub on_unmute_body: &'a str,
-    pub websocket_port: &'a str,
+    pub browser_sync_port: &'a str,
     pub original: &'a Config,
     pub max_sound_bytes: u64,
 }
@@ -640,9 +640,9 @@ pub(crate) fn build_and_validate_config(p: &ValidateParams<'_>) -> Result<Config
         p.color_text.to_string()
     };
 
-    // Parse websocket_port from string (empty or "0" = disabled)
-    let ws_port_str = p.websocket_port.trim();
-    let websocket_port: u16 = if ws_port_str.is_empty() {
+    // Parse browser_sync_port from string (empty or "0" = disabled)
+    let ws_port_str = p.browser_sync_port.trim();
+    let browser_sync_port: u16 = if ws_port_str.is_empty() {
         0
     } else {
         match ws_port_str.parse::<u16>() {
@@ -650,7 +650,7 @@ pub(crate) fn build_and_validate_config(p: &ValidateParams<'_>) -> Result<Config
             Err(_) => {
                 return Err(vec![format!(
                     "Invalid browser sync port \"{}\". Enter a number (0 = disabled, e.g. 9736)",
-                    p.websocket_port
+                    p.browser_sync_port
                 )]);
             }
         }
@@ -679,7 +679,7 @@ pub(crate) fn build_and_validate_config(p: &ValidateParams<'_>) -> Result<Config
             device_serial: p.original.system.device_serial.clone(),
             notifications_enabled: p.notifications_enabled,
             log_level: p.log_level.to_string(),
-            websocket_port,
+            browser_sync_port,
         },
         hooks: focusmute_lib::config::HooksConfig {
             on_mute_url: p.on_mute_url.to_string(),
@@ -826,7 +826,7 @@ mod tests {
             on_unmute_url: "",
             on_mute_body: "",
             on_unmute_body: "",
-            websocket_port: "0",
+            browser_sync_port: "0",
             original,
             max_sound_bytes: 10_000_000,
         }
@@ -1205,43 +1205,43 @@ mod tests {
     // ── WebSocket port ──
 
     #[test]
-    fn build_valid_websocket_port() {
+    fn build_valid_browser_sync_port() {
         let orig = Config::default();
         let config = build_and_validate_config(&ValidateParams {
-            websocket_port: "9736",
+            browser_sync_port: "9736",
             ..default_test_params(&orig)
         })
         .expect("should be Ok");
-        assert_eq!(config.system.websocket_port, 9736);
+        assert_eq!(config.system.browser_sync_port, 9736);
     }
 
     #[test]
-    fn build_websocket_port_zero_is_disabled() {
+    fn build_browser_sync_port_zero_is_disabled() {
         let orig = Config::default();
         let config = build_and_validate_config(&ValidateParams {
-            websocket_port: "0",
+            browser_sync_port: "0",
             ..default_test_params(&orig)
         })
         .expect("should be Ok");
-        assert_eq!(config.system.websocket_port, 0);
+        assert_eq!(config.system.browser_sync_port, 0);
     }
 
     #[test]
-    fn build_websocket_port_empty_is_disabled() {
+    fn build_browser_sync_port_empty_is_disabled() {
         let orig = Config::default();
         let config = build_and_validate_config(&ValidateParams {
-            websocket_port: "",
+            browser_sync_port: "",
             ..default_test_params(&orig)
         })
         .expect("should be Ok");
-        assert_eq!(config.system.websocket_port, 0);
+        assert_eq!(config.system.browser_sync_port, 0);
     }
 
     #[test]
-    fn build_websocket_port_invalid_string() {
+    fn build_browser_sync_port_invalid_string() {
         let orig = Config::default();
         let result = build_and_validate_config(&ValidateParams {
-            websocket_port: "abc",
+            browser_sync_port: "abc",
             ..default_test_params(&orig)
         });
         assert!(result.is_err());
@@ -1253,10 +1253,10 @@ mod tests {
     }
 
     #[test]
-    fn build_websocket_port_privileged_rejected() {
+    fn build_browser_sync_port_privileged_rejected() {
         let orig = Config::default();
         let result = build_and_validate_config(&ValidateParams {
-            websocket_port: "80",
+            browser_sync_port: "80",
             ..default_test_params(&orig)
         });
         assert!(result.is_err());

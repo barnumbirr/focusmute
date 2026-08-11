@@ -72,8 +72,8 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
     if let Some(config_path) = Config::path() {
         log::info!("[config] {}", config_path.display());
     }
-    let sync_banner = if config.system.websocket_port > 0 {
-        config.system.websocket_port.to_string()
+    let sync_banner = if config.system.browser_sync_port > 0 {
+        config.system.browser_sync_port.to_string()
     } else {
         "off".to_string()
     };
@@ -201,7 +201,7 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
     };
 
     // Spawn browser sync listener for extension mute sync
-    let sync_port = state.config.system.websocket_port;
+    let sync_port = state.config.system.browser_sync_port;
     let sync_handle = if sync_port > 0 {
         log::info!("[sync] starting on port {sync_port}");
         Some(super::browser_sync::spawn_sync_thread(
