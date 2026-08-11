@@ -150,6 +150,12 @@ pub struct SystemConfig {
     /// on this port for mute state messages from the browser extension.
     #[serde(default = "default_browser_sync_port", alias = "websocket_port")]
     pub browser_sync_port: u16,
+
+    /// Mirror user-initiated mute changes back into browser meetings
+    /// (extension clicks the meeting's mute button). Requires
+    /// `browser_sync_port` and the browser extension. Default: false.
+    #[serde(default)]
+    pub browser_sync_reverse: bool,
 }
 
 impl Default for SystemConfig {
@@ -160,6 +166,7 @@ impl Default for SystemConfig {
             notifications_enabled: false,
             log_level: default_log_level(),
             browser_sync_port: 0,
+            browser_sync_reverse: false,
         }
     }
 }
@@ -298,6 +305,7 @@ impl From<LegacyConfig> for Config {
                 notifications_enabled: legacy.notifications_enabled,
                 log_level: default_log_level(),
                 browser_sync_port: default_browser_sync_port(),
+                browser_sync_reverse: false,
             },
             hooks: HooksConfig {
                 on_mute_url: legacy.on_mute_command,

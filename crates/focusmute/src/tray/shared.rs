@@ -200,13 +200,17 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
         None
     };
 
-    // Spawn browser sync listener for extension mute sync
+    // Spawn browser sync listener for extension mute sync. The reverse slot
+    // carries user-initiated transitions to the extension's poll requests;
+    // it always exists so the reverse-sync toggle hot-applies.
+    let reverse_slot = Arc::new(super::browser_sync::ReverseSlot::new());
     let sync_port = state.config.system.browser_sync_port;
     let sync_handle = if sync_port > 0 {
         log::info!("[sync] starting on port {sync_port}");
         Some(super::browser_sync::spawn_sync_thread(
             sync_port,
             tx.clone(),
+            Arc::clone(&reverse_slot),
         ))
     } else {
         log::info!("[sync] disabled (port=0)");
@@ -270,12 +274,25 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
                         device = None;
                         tray_menu.set_device_connected(false, &tray);
                     }
+                    // Captured before the clear below: a pending flag means
+                    // this transition originated in the browser.
+                    let browser_originated = browser_sync_pending;
                     let suppress_sound =
                         browser_sync_pending && state.config.sound.suppress_browser_sync_sound;
                     // Only clear the flag when a real state change fires —
                     // NoChange means the debouncer hasn't confirmed yet.
                     if !matches!(action, MonitorAction::NoChange) {
                         browser_sync_pending = false;
+                    }
+                    // Reverse sync: mirror USER-initiated transitions to the
+                    // extension. Browser-originated ones are echoes — the
+                    // meeting page already shows that state.
+                    if state.config.system.browser_sync_reverse && !browser_originated {
+                        match action {
+                            MonitorAction::ApplyMute => reverse_slot.set(true),
+                            MonitorAction::ClearMute => reverse_slot.set(false),
+                            _ => {}
+                        }
                     }
                     state::apply_mute_ui(
                         action,

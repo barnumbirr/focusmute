@@ -3,9 +3,12 @@
 //! Listens on `127.0.0.1:<port>` for simple HTTP POST requests with JSON bodies.
 //! No dependencies beyond `std` and `serde_json` (already in the dep tree).
 //!
-//! Understands two JSON message types:
+//! Understands three JSON message types:
 //! - `{"type": "mute_state", "platform": "...", "muted": bool}` → `Msg::BrowserMute`
 //! - `{"type": "ping"}` → replies `{"type": "pong"}`
+//! - `{"type": "poll_actions"}` → replies `{"type": "pending_action", "action":
+//!   "mute"|"unmute"|null}` — reverse sync: the extension polls for
+//!   user-initiated mute changes to mirror into the meeting page
 //!
 //! Firefox forces TLS on WebSocket connections from extension background scripts,
 //! but allows plain `http://127.0.0.1` via `fetch()` (localhost is exempt from
@@ -14,14 +17,48 @@
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::Ordering;
-use std::sync::mpsc;
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 
 use super::state::Msg;
 use crate::RUNNING;
+
+/// A pending reverse-sync action older than this is stale: delivering it
+/// (e.g. after the extension was closed for a while) could undo a mute
+/// change the user has since made in the meeting itself.
+const MAX_ACTION_AGE: Duration = Duration::from_secs(3);
+
+/// Single-slot mailbox for the latest user-initiated mute transition.
+///
+/// Last-wins by design: mute intents supersede each other, so a queue would
+/// only replay stale toggles. The slot is consumed by the extension's next
+/// `poll_actions` request.
+pub struct ReverseSlot(Mutex<Option<(bool, Instant)>>);
+
+impl ReverseSlot {
+    pub fn new() -> Self {
+        Self(Mutex::new(None))
+    }
+
+    /// Record a user-initiated transition to `muted`.
+    pub fn set(&self, muted: bool) {
+        *self.0.lock().unwrap() = Some((muted, Instant::now()));
+    }
+
+    /// Take the pending action if one is present and no older than `max_age`.
+    /// Consumes the slot either way.
+    pub fn take_fresh(&self, max_age: Duration) -> Option<bool> {
+        self.0
+            .lock()
+            .unwrap()
+            .take()
+            .filter(|(_, at)| at.elapsed() <= max_age)
+            .map(|(muted, _)| muted)
+    }
+}
 
 /// Maximum size for the request line (method + path + version).
 const MAX_REQUEST_LINE: usize = 8192;
@@ -44,18 +81,24 @@ enum BrowserMessage {
     },
     #[serde(rename = "ping")]
     Ping,
+    #[serde(rename = "poll_actions")]
+    PollActions,
 }
 
 /// Spawn a background thread that listens for HTTP requests from the
 /// browser extension and forwards mute state changes to the tray event loop.
-pub fn spawn_sync_thread(port: u16, tx: mpsc::Sender<Msg>) -> JoinHandle<()> {
+pub fn spawn_sync_thread(
+    port: u16,
+    tx: mpsc::Sender<Msg>,
+    reverse: Arc<ReverseSlot>,
+) -> JoinHandle<()> {
     std::thread::Builder::new()
         .name("sync-listener".into())
-        .spawn(move || run_listener(port, &tx))
+        .spawn(move || run_listener(port, &tx, &reverse))
         .expect("failed to spawn browser sync listener thread")
 }
 
-fn run_listener(port: u16, tx: &mpsc::Sender<Msg>) {
+fn run_listener(port: u16, tx: &mpsc::Sender<Msg>, reverse: &ReverseSlot) {
     let addr = format!("127.0.0.1:{port}");
     let listener = match TcpListener::bind(&addr) {
         Ok(l) => {
@@ -79,7 +122,7 @@ fn run_listener(port: u16, tx: &mpsc::Sender<Msg>) {
                 log::debug!("[sync] connection from {peer}");
                 stream.set_nonblocking(false).ok();
                 stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
-                handle_request(stream, tx);
+                handle_request(stream, tx, reverse);
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(100));
@@ -131,7 +174,7 @@ fn is_origin_allowed(origin: Option<&str>) -> bool {
 
 // ── Request handling ──
 
-fn handle_request(mut stream: TcpStream, tx: &mpsc::Sender<Msg>) {
+fn handle_request(mut stream: TcpStream, tx: &mpsc::Sender<Msg>, reverse: &ReverseSlot) {
     let mut reader = BufReader::new(&stream);
 
     // Read request line
@@ -223,6 +266,11 @@ fn handle_request(mut stream: TcpStream, tx: &mpsc::Sender<Msg>) {
             "{\"type\":\"ack\"}"
         }
         Ok(BrowserMessage::Ping) => "{\"type\":\"pong\"}",
+        Ok(BrowserMessage::PollActions) => match reverse.take_fresh(MAX_ACTION_AGE) {
+            Some(true) => "{\"type\":\"pending_action\",\"action\":\"mute\"}",
+            Some(false) => "{\"type\":\"pending_action\",\"action\":\"unmute\"}",
+            None => "{\"type\":\"pending_action\",\"action\":null}",
+        },
         Err(e) => {
             log::debug!("[sync] unknown message: {e}");
             "{\"type\":\"error\"}"
@@ -360,13 +408,21 @@ mod tests {
     /// Spawn a listener on an OS-assigned port, accept one connection, handle it,
     /// and return the port. The `tx` channel receives any `Msg::BrowserMute` sent.
     fn serve_one_request(tx: mpsc::Sender<Msg>) -> std::net::SocketAddr {
+        serve_one_request_with_slot(tx, Arc::new(ReverseSlot::new()))
+    }
+
+    /// Like [`serve_one_request`], with a caller-provided reverse slot.
+    fn serve_one_request_with_slot(
+        tx: mpsc::Sender<Msg>,
+        slot: Arc<ReverseSlot>,
+    ) -> std::net::SocketAddr {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
         std::thread::spawn(move || {
             let (stream, _) = listener.accept().unwrap();
             stream.set_nonblocking(false).ok();
             stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
-            handle_request(stream, &tx);
+            handle_request(stream, &tx, &slot);
         });
         addr
     }
@@ -475,6 +531,59 @@ mod tests {
         let body = r#"{"type":"ping"}"#;
         let response = send_http(addr, "POST", &[], Some(body));
         assert!(response.contains("200 OK"), "got: {response}");
+    }
+
+    // ── Reverse sync (poll_actions) tests ──
+
+    #[test]
+    fn reverse_slot_is_last_wins_and_consumed_on_take() {
+        let slot = ReverseSlot::new();
+        assert_eq!(slot.take_fresh(MAX_ACTION_AGE), None);
+        slot.set(true);
+        slot.set(false); // supersedes
+        assert_eq!(slot.take_fresh(MAX_ACTION_AGE), Some(false));
+        assert_eq!(slot.take_fresh(MAX_ACTION_AGE), None); // consumed
+    }
+
+    #[test]
+    fn reverse_slot_discards_stale_actions() {
+        let slot = ReverseSlot::new();
+        slot.set(true);
+        // A zero max-age makes any recorded action stale.
+        assert_eq!(slot.take_fresh(Duration::ZERO), None);
+        // Stale take still consumes the slot.
+        assert_eq!(slot.take_fresh(MAX_ACTION_AGE), None);
+    }
+
+    #[test]
+    fn http_poll_actions_empty_returns_null() {
+        let (tx, _rx) = mpsc::channel();
+        let addr = serve_one_request(tx);
+        let response = send_http(addr, "POST", &[], Some(r#"{"type":"poll_actions"}"#));
+        assert!(response.contains("200 OK"), "got: {response}");
+        assert!(response.contains(r#""action":null"#), "got: {response}");
+    }
+
+    #[test]
+    fn http_poll_actions_delivers_pending_mute() {
+        let (tx, _rx) = mpsc::channel();
+        let slot = Arc::new(ReverseSlot::new());
+        slot.set(true);
+        let addr = serve_one_request_with_slot(tx, Arc::clone(&slot));
+        let response = send_http(addr, "POST", &[], Some(r#"{"type":"poll_actions"}"#));
+        assert!(response.contains(r#""action":"mute""#), "got: {response}");
+        // Delivered exactly once.
+        assert_eq!(slot.take_fresh(MAX_ACTION_AGE), None);
+    }
+
+    #[test]
+    fn http_poll_actions_delivers_pending_unmute() {
+        let (tx, _rx) = mpsc::channel();
+        let slot = Arc::new(ReverseSlot::new());
+        slot.set(false);
+        let addr = serve_one_request_with_slot(tx, Arc::clone(&slot));
+        let response = send_http(addr, "POST", &[], Some(r#"{"type":"poll_actions"}"#));
+        assert!(response.contains(r#""action":"unmute""#), "got: {response}");
     }
 
     #[test]

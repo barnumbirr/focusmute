@@ -49,6 +49,7 @@ pub struct SettingsApp {
     on_unmute_body: String,
 
     browser_sync_port: String,
+    browser_sync_reverse: bool,
 
     // ── Sound preview ──
     preview_player: SoundPreviewPlayer,
@@ -124,6 +125,7 @@ impl SettingsApp {
             on_unmute_body: config.hooks.on_unmute_body.clone(),
 
             browser_sync_port: config.system.browser_sync_port.to_string(),
+            browser_sync_reverse: config.system.browser_sync_reverse,
 
             preview_player: SoundPreviewPlayer::new(),
 
@@ -163,6 +165,7 @@ impl SettingsApp {
             on_mute_body: &self.on_mute_body,
             on_unmute_body: &self.on_unmute_body,
             browser_sync_port: &self.browser_sync_port,
+            browser_sync_reverse: self.browser_sync_reverse,
             blink_on_talk: self.blink_on_talk,
             talk_threshold: self.talk_threshold,
             original: &self.original,
@@ -204,6 +207,7 @@ impl SettingsApp {
             on_mute_body: self.on_mute_body.clone(),
             on_unmute_body: self.on_unmute_body.clone(),
             browser_sync_port: self.browser_sync_port.clone(),
+            browser_sync_reverse: self.browser_sync_reverse,
             blink_on_talk: self.blink_on_talk,
             talk_threshold: self.talk_threshold,
         }
@@ -232,6 +236,7 @@ struct FormSnapshot {
     on_mute_body: String,
     on_unmute_body: String,
     browser_sync_port: String,
+    browser_sync_reverse: bool,
     blink_on_talk: bool,
     talk_threshold: u32,
 }
@@ -504,6 +509,11 @@ impl eframe::App for SettingsApp {
                             ui.add_space(2.0);
                             ui.checkbox(&mut self.suppress_browser_sync_sound, "Suppress sound on mute/unmute");
                             ui.add_space(2.0);
+                            ui.checkbox(&mut self.browser_sync_reverse, "Also mute/unmute the meeting (Google Meet)")
+                                .on_hover_text(
+                                    "Hotkey and tray mute changes click the meeting's own mute button",
+                                );
+                            ui.add_space(2.0);
                             egui::Grid::new("browser_sync_grid")
                                 .num_columns(2)
                                 .min_col_width(80.0)
@@ -650,6 +660,7 @@ pub(crate) struct ValidateParams<'a> {
     pub on_mute_body: &'a str,
     pub on_unmute_body: &'a str,
     pub browser_sync_port: &'a str,
+    pub browser_sync_reverse: bool,
     pub blink_on_talk: bool,
     pub talk_threshold: u32,
     pub original: &'a Config,
@@ -711,6 +722,7 @@ pub(crate) fn build_and_validate_config(p: &ValidateParams<'_>) -> Result<Config
             notifications_enabled: p.notifications_enabled,
             log_level: p.log_level.to_string(),
             browser_sync_port,
+            browser_sync_reverse: p.browser_sync_reverse,
         },
         hooks: focusmute_lib::config::HooksConfig {
             on_mute_url: p.on_mute_url.to_string(),
@@ -842,6 +854,7 @@ mod tests {
             color_rgb: [1.0, 0.0, 0.0],
             hotkey: "Ctrl+Shift+M",
             ptt_hotkey: "",
+            browser_sync_reverse: false,
             blink_on_talk: false,
             talk_threshold: 400,
             sound_enabled: true,
