@@ -32,10 +32,10 @@ static LOGGER_HANDLE: OnceLock<flexi_logger::LoggerHandle> = OnceLock::new();
 /// Change the log level at runtime (called from the settings dialog).
 #[cfg(any(windows, target_os = "linux"))]
 pub fn set_log_level(level: &str) {
-    if let Some(handle) = LOGGER_HANDLE.get() {
-        if let Err(e) = handle.parse_new_spec(level) {
-            log::warn!("[config] could not set log level to '{level}': {e}");
-        }
+    if let Some(handle) = LOGGER_HANDLE.get()
+        && let Err(e) = handle.parse_new_spec(level)
+    {
+        log::warn!("[config] could not set log level to '{level}': {e}");
     }
 }
 

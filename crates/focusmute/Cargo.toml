@@ -7,7 +7,7 @@ authors = ["Martin Simon"]
 license = "Apache-2.0"
 repository = "https://github.com/barnumbirr/focusmute"
 homepage = "https://github.com/barnumbirr/focusmute"
-rust-version = "1.85"
+rust-version = "1.92"
 
 [[bin]]
 name = "focusmute"

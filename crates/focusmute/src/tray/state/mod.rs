@@ -212,10 +212,8 @@ impl TrayState {
     /// trigger a spurious ApplyMute/ClearMute event.
     pub fn set_initial_muted(&mut self, muted: bool, device: &impl ScarlettDevice) {
         self.indicator.force_state(muted);
-        if muted {
-            if let Err(e) = self.indicator.apply_mute(device) {
-                log::warn!("[mute] could not apply initial mute indicator: {e}");
-            }
+        if muted && let Err(e) = self.indicator.apply_mute(device) {
+            log::warn!("[mute] could not apply initial mute indicator: {e}");
         }
     }
 
@@ -316,12 +314,9 @@ impl TrayState {
                     // Clear old indicator before switching strategy
                     if self.indicator.is_muted()
                         && let Some(dev) = device
+                        && let Err(e) = self.indicator.clear_mute(dev)
                     {
-                        if let Err(e) = self.indicator.clear_mute(dev) {
-                            log::warn!(
-                                "[mute] could not clear indicator before strategy switch: {e}"
-                            );
-                        }
+                        log::warn!("[mute] could not clear indicator before strategy switch: {e}");
                     }
                     self.indicator.set_strategy(new_strategy);
                 }
@@ -334,10 +329,9 @@ impl TrayState {
         // Re-apply current mute LED state with new settings
         if self.indicator.is_muted()
             && let Some(dev) = device
+            && let Err(e) = self.indicator.apply_mute(dev)
         {
-            if let Err(e) = self.indicator.apply_mute(dev) {
-                log::warn!("[mute] could not re-apply indicator after config change: {e}");
-            }
+            log::warn!("[mute] could not re-apply indicator after config change: {e}");
         }
 
         // Save to disk and update config

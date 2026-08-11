@@ -111,10 +111,10 @@ pub fn reregister_toggle(hk: &mut HotkeyState, new_hotkey_str: &str) -> bool {
 /// Returns `true` if the new PTT hotkey was registered (or disabled) successfully.
 pub fn reregister_ptt(hk: &mut HotkeyState, new_ptt_str: &str) -> bool {
     // Unregister old PTT if present
-    if let Some(old_ptt) = hk.ptt {
-        if let Err(e) = hk.manager.unregister(old_ptt) {
-            log::warn!("[hotkey] could not unregister old PTT hotkey: {e}");
-        }
+    if let Some(old_ptt) = hk.ptt
+        && let Err(e) = hk.manager.unregister(old_ptt)
+    {
+        log::warn!("[hotkey] could not unregister old PTT hotkey: {e}");
     }
 
     let new_ptt_str = new_ptt_str.trim();

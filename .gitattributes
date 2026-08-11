@@ -1,0 +1,8 @@
+# LF everywhere — CRLF has bitten repeatedly (sed no-ops on workflows,
+# and the shipped .deb's maintainer scripts/udev rules were broken by \r).
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.bmp binary
+*.wav binary
+*.rtf binary

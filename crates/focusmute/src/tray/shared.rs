@@ -393,10 +393,10 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
             if let Some(action) = blink.advance(now, talking) {
                 apply_blink_action(dev, &state, action);
             }
-        } else if let Some(action) = blink.reset(state.indicator.is_muted()) {
-            if let Some(ref dev) = device {
-                apply_blink_action(dev, &state, action);
-            }
+        } else if let Some(action) = blink.reset(state.indicator.is_muted())
+            && let Some(ref dev) = device
+        {
+            apply_blink_action(dev, &state, action);
         }
 
         // 4. Menu events
@@ -521,10 +521,10 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
 
     // Only restore LEDs if we were muted (i.e. we actually changed them).
     // Skipping when live avoids a spurious IOCTL that can fail during shutdown.
-    if state.indicator.is_muted() {
-        if let Some(ref dev) = device {
-            state.restore_on_exit(dev);
-        }
+    if state.indicator.is_muted()
+        && let Some(ref dev) = device
+    {
+        state.restore_on_exit(dev);
     }
     Ok(())
 }

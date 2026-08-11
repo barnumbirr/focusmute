@@ -72,10 +72,10 @@ fn monitor_loop(mctx: &mut MonitorCtx, monitor: &impl MuteMonitor) {
     if initial {
         // Sync the debouncer so polls don't trigger a spurious ApplyMute
         mctx.indicator.force_state(true);
-        if let Some(ref dev) = mctx.device {
-            if let Err(e) = mctx.indicator.apply_mute(dev) {
-                log::warn!("[device] could not apply initial mute indicator: {e}");
-            }
+        if let Some(ref dev) = mctx.device
+            && let Err(e) = mctx.indicator.apply_mute(dev)
+        {
+            log::warn!("[device] could not apply initial mute indicator: {e}");
         }
         println!(
             "  MUTED (initial) -> {}",
