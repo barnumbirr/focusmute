@@ -78,7 +78,7 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
         "off".to_string()
     };
     log::info!(
-        "[focusmute] v{} starting (hotkey={}, ptt={}, inputs={}, color={}, sound={}, notifications={}, log={}, sync={})",
+        "[focusmute] v{} starting (hotkey={}, ptt={}, inputs={}, color={}, sound={}, notifications={}, log={}, sync={}, reverse={}, blink={})",
         env!("CARGO_PKG_VERSION"),
         config.keyboard.hotkey,
         if config.keyboard.push_to_talk_hotkey.is_empty() {
@@ -100,6 +100,16 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
         },
         config.system.log_level,
         sync_banner,
+        if config.system.browser_sync_reverse {
+            "on"
+        } else {
+            "off"
+        },
+        if config.indicator.blink_on_talk {
+            "on"
+        } else {
+            "off"
+        },
     );
     if !config.hooks.on_mute_url.trim().is_empty() || !config.hooks.on_unmute_url.trim().is_empty()
     {
@@ -289,8 +299,14 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
                     // meeting page already shows that state.
                     if state.config.system.browser_sync_reverse && !browser_originated {
                         match action {
-                            MonitorAction::ApplyMute => reverse_slot.set(true),
-                            MonitorAction::ClearMute => reverse_slot.set(false),
+                            MonitorAction::ApplyMute => {
+                                log::debug!("[sync] reverse action queued: mute");
+                                reverse_slot.set(true);
+                            }
+                            MonitorAction::ClearMute => {
+                                log::debug!("[sync] reverse action queued: unmute");
+                                reverse_slot.set(false);
+                            }
                             _ => {}
                         }
                     }
@@ -341,15 +357,33 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
             let now = std::time::Instant::now();
             let talking = if blink.meter_due(now) {
                 blink.note_meter_read(now);
-                match focusmute_lib::meter::read_meters(dev, focusmute_lib::meter::METER_COUNT) {
-                    Ok(levels) => Some(
-                        focusmute_lib::meter::max_input_level(
+                let read_result =
+                    focusmute_lib::meter::read_meters(dev, focusmute_lib::meter::METER_COUNT);
+                let elapsed = now.elapsed();
+                // A meter read blocks this loop, and the loop applies mute
+                // transitions — slow reads directly delay unmute. Surface it.
+                if elapsed > std::time::Duration::from_millis(50) {
+                    log::warn!("[blink] slow meter read: {} ms", elapsed.as_millis());
+                }
+                match read_result {
+                    Ok(levels) => {
+                        let level = focusmute_lib::meter::max_input_level(
                             &levels,
                             &state.indicator.strategy().input_indices,
-                        ) >= state.config.indicator.talk_threshold,
-                    ),
+                        );
+                        log::debug!(
+                            "[blink] meter read {} ms, level {} (threshold {})",
+                            elapsed.as_millis(),
+                            level,
+                            state.config.indicator.talk_threshold
+                        );
+                        Some(level >= state.config.indicator.talk_threshold)
+                    }
                     Err(e) => {
-                        log::debug!("[blink] meter read failed: {e}");
+                        log::warn!(
+                            "[blink] meter read failed after {} ms: {e}",
+                            elapsed.as_millis()
+                        );
                         None
                     }
                 }
