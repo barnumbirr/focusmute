@@ -36,7 +36,7 @@ global-hotkey = "0.8"
 image = { version = "0.25", default-features = false, features = ["png", "ico"] }
 rodio = { version = "0.22", default-features = false, features = ["wav", "playback"] }
 auto-launch = "0.6"
-eframe = { version = "0.34", default-features = false, features = ["glow", "default_fonts", "x11", "wayland"] }
+eframe = { version = "0.36", default-features = false, features = ["glow", "default_fonts", "x11", "wayland"] }
 rfd = "0.17"
 single-instance = "0.3"
 
