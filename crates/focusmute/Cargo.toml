@@ -30,8 +30,8 @@ ctrlc = "3"
 
 # Tray app dependencies — shared across Windows and Linux
 [target.'cfg(any(windows, target_os = "linux"))'.dependencies]
-tray-icon = "0.24"
-muda = "0.19"
+tray-icon = "0.25"
+muda = "0.20"
 global-hotkey = "0.8"
 image = { version = "0.25", default-features = false, features = ["png", "ico"] }
 rodio = { version = "0.22", default-features = false, features = ["wav", "playback"] }
