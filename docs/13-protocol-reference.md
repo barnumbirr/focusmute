@@ -810,9 +810,9 @@ Inbound masks observed on a Solo, which do not match the 2i2 table above:
 | 2 | Inst |
 | 3 | 48V |
 | 4 | Input 1 number |
-| 6–11 | Input 1 halo |
+| 5–11 | Input 1 halo |
 | 12 | Input 2 number |
-| 14–19 | Input 2 halo |
+| 13–19 | Input 2 halo |
 | 24–25 | Output |
 | 26 | USB |
 | 27, 31 | Direct |
@@ -823,9 +823,9 @@ than LED 0. The predictor in `layout.rs` assumes the input zone starts at index
 exists. The 8-LED stride per input still holds.
 
 FocusMute ships this map as a `ModelProfile` so a Solo works without a `map`
-run, marked `ProfileSource::Reported("SunsetSH/focusmute")`. That marking is
-load-bearing: it makes the app log and notify the user that these indices are
-unverified, and it is what separates this profile from the 2i2's. Its
+run, marked `ProfileSource::Reported` with both sources named below. That
+marking is load-bearing: it makes the app log and notify the user that these
+indices are unverified, and it is what separates this profile from the 2i2's. Its
 `button_labels` and `cache_dependent_buttons` are both empty — the first
 because the profile struct places buttons contiguously after the output halo
 and the Solo interleaves them with the input zone, the second because
@@ -858,15 +858,20 @@ Direct button is reserved by firmware for Combine Inputs.
 
 The Solo values in this section come from
 [SunsetSH/focusmute](https://github.com/SunsetSH/focusmute), an Apache-2.0
-derivative of this project, and from its `docs/20-ledtest.md` panel sweep. They
-have not been verified here — there is no Solo on this bench.
+derivative of this project, and from its `docs/20-ledtest.md` panel sweep. A
+second Solo, in
+[HevarHal/Focusmute-Solo-Build](https://github.com/HevarHal/Focusmute-Solo-Build),
+confirms the number LEDs (4, 12) and Direct (27, 31) and supplies the halo
+ranges; its README states the map was confirmed on its owner's device, with no
+sweep log published. Neither has been verified here: there is no Solo on this
+bench.
 
-Three caveats worth carrying. LED 12 is inferred from the stride and its
-symmetry with LED 4 rather than directly observed; the sweep recorded no
-visible change at that index, most likely because the mic was in input 2 and
-the firmware was repainting those LEDs from the live signal. The white restore
-colour is the 2i2's, tuned by eye against that panel and not re-tuned against a
-Solo. And the whole map comes from one device.
+Two caveats worth carrying. The sweep recorded no visible change at LEDs 5, 12
+and 13, most likely because the firmware repaints the input zone from the live
+signal, so those three rest on the second report and the 8-LED stride. The
+white restore colour is the 2i2's, tuned by eye against that panel and not
+re-tuned against a Solo. The offsets in the table further up come from the
+first device only.
 
 Nothing loads a layout at runtime, so a wrong index here is a code change, not
 a config change. `focusmute-cli map` flashes one LED at a time and records what

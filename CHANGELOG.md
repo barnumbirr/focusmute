@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Scarlett Solo 4th Gen LED profile, so mute indication targets the right number LEDs without a `map` run. The layout is reported by [SunsetSH/focusmute](https://github.com/SunsetSH/focusmute) and has not been verified on this project's hardware; FocusMute names the source in a startup warning whenever it uses the profile. If an index is wrong, `focusmute-cli map` reports what each LED really is
+- Scarlett Solo 4th Gen LED profile, so mute indication targets the right number LEDs without a `map` run. The layout is reported by [SunsetSH/focusmute](https://github.com/SunsetSH/focusmute) and [HevarHal/Focusmute-Solo-Build](https://github.com/HevarHal/Focusmute-Solo-Build) and has not been verified on this project's hardware; FocusMute names the sources in a startup warning whenever it uses the profile. If an index is wrong, `focusmute-cli map` reports what each LED really is
 
 ### Changed
 

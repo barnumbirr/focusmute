@@ -182,10 +182,9 @@ static SCARLETT_2I2: ModelProfile = ModelProfile {
 // hand: `map` walks the panel and reports what each LED really is, but
 // `--output-code` prints the schema *prediction*, not the corrected map.
 //
-// Known soft spot: LED 12 follows from the 8-LED stride and its symmetry with
-// LED 4 rather than from the sweep, which recorded no visible change at that
-// index. The mic was in input 2 at the time, so the firmware was actively
-// driving those LEDs and would have repainted the probe colour immediately.
+// A second Solo, reported by HevarHal/Focusmute-Solo-Build, confirms numbers
+// 4 and 12 (the sweep missed 12) and puts halo segments at 5-11 and 13-19.
+// The sweep also missed 5 and 13, likely because the firmware repaints halos.
 
 /// Offsets observed on a Solo running firmware 2.0.2417.0. Every one differs
 /// from the 2i2's; see docs/13 § "Other 4th Gen Models".
@@ -204,12 +203,12 @@ static SCARLETT_SOLO_OFFSETS: DeviceOffsets = DeviceOffsets {
 static SCARLETT_SOLO_INPUT_HALOS: [HaloRange; 2] = [
     HaloRange {
         number_led: 4,
-        segments: 6..12,
-    }, // Input 1 — instrument. Index 5 lit nothing during the sweep.
+        segments: 5..12,
+    }, // Input 1 (instrument)
     HaloRange {
         number_led: 12,
-        segments: 14..20,
-    }, // Input 2 — mic. Index 13 lit nothing during the sweep.
+        segments: 13..20,
+    }, // Input 2 (mic)
 ];
 
 static SCARLETT_SOLO: ModelProfile = ModelProfile {
@@ -240,7 +239,7 @@ static SCARLETT_SOLO: ModelProfile = ModelProfile {
     // Solo with no reliable way back. Deliberately empty.
     cache_dependent_buttons: &[],
     offsets: &SCARLETT_SOLO_OFFSETS,
-    source: ProfileSource::Reported("SunsetSH/focusmute"),
+    source: ProfileSource::Reported("SunsetSH/focusmute and HevarHal/Focusmute-Solo-Build"),
 };
 
 /// Detect the model profile from a model name.
@@ -338,7 +337,7 @@ mod tests {
         assert_eq!(profile.led_count, 32);
         assert_eq!(
             profile.source,
-            ProfileSource::Reported("SunsetSH/focusmute")
+            ProfileSource::Reported("SunsetSH/focusmute and HevarHal/Focusmute-Solo-Build")
         );
     }
 
@@ -352,6 +351,17 @@ mod tests {
         let two_i_two = detect_model("Scarlett 2i2 4th Gen").unwrap();
         let predicted: Vec<usize> = two_i_two.input_halos.iter().map(|h| h.number_led).collect();
         assert_ne!(numbers, predicted, "must not reuse the 2i2 positions");
+    }
+
+    /// Each halo is seven segments right after its number, as on the 2i2.
+    #[test]
+    fn solo_map_labels_seven_segment_halos() {
+        let profile = detect_model("Scarlett Solo 4th Gen").unwrap();
+        let labels = model_labels(profile, profile.button_labels);
+        assert_eq!(labels[5], "Input 1 — Halo segment 1");
+        assert_eq!(labels[11], "Input 1 — Halo segment 7");
+        assert_eq!(labels[13], "Input 2 — Halo segment 1");
+        assert_eq!(labels[19], "Input 2 — Halo segment 7");
     }
 
     /// An unverified profile has to say so wherever it is used.
