@@ -13,7 +13,7 @@ rust-version = "1.95"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "1.0"
-dirs = "6"
+dirs = "7"
 base64 = "0.23"
 flate2 = "1"
 log = "0.4"
@@ -27,7 +27,7 @@ nusb = "0.2"
 libpulse-binding = "2"
 
 [target.'cfg(windows)'.dependencies]
-windows-core = "0.62"
+windows-core = "0.100"
 windows = { version = "0.62", features = [
     "Win32_Devices_DeviceAndDriverInstallation",
     "Win32_Devices_FunctionDiscovery",
