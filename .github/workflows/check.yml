@@ -31,7 +31,11 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
 
-      # Type-checks the Windows-only code without linking, so no mingw is needed.
+      # The icon resource is built by mingw's windres, which preprocesses through
+      # mingw's gcc. Nothing else in the Windows check links or needs mingw.
+      - name: Install mingw for the icon resource
+        run: sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64
+
       - name: Clippy (Windows)
         run: cargo clippy --target x86_64-pc-windows-gnu --all-targets -- -D warnings
 

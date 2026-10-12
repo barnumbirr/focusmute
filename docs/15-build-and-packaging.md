@@ -181,7 +181,7 @@ Uses `cargo-bins/cargo-binstall` (SHA-pinned) to download pre-built `cargo-wix` 
 
 ### Why Windows Release Runs on `windows-latest` (Not Cross-Compiled)
 
-The MSI installer uses WiX Toolset, which is Windows-only. While the binaries could be cross-compiled on Linux, `cargo wix` requires a Windows host. The CI check job runs lint, test, and audit on Linux, plus clippy for the Windows target, which type-checks the Windows-only code without linking. The release job uses native Windows for the full MSI pipeline.
+The MSI installer uses WiX Toolset, which is Windows-only. While the binaries could be cross-compiled on Linux, `cargo wix` requires a Windows host. The CI check job runs lint, test, and audit on Linux, plus clippy for the Windows target, which type-checks the Windows-only code without linking (`gcc-mingw-w64-x86-64` is installed only because `winresource` builds the icon resource with mingw's windres). The release job uses native Windows for the full MSI pipeline.
 
 ---
 [← Firmware Binary Analysis](14-firmware-binary-analysis.md) | [Index](README.md) | [Multi-Model Mute Design →](16-multi-model-mute-design.md)
