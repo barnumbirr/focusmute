@@ -47,6 +47,11 @@ impl TrayMenu {
     pub fn set_device_connected(&self, connected: bool, tray: &tray_icon::TrayIcon) {
         self.status_item.set_text(if connected {
             "Live"
+        } else if matches!(
+            focusmute_lib::device::not_found_error(),
+            focusmute_lib::device::DeviceError::DriverMissing
+        ) {
+            "Install the Focusrite USB driver"
         } else {
             "Connect a Scarlett 4th Gen device"
         });
