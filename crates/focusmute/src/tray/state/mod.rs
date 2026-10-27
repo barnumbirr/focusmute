@@ -99,6 +99,10 @@ pub fn get_auto_launch() -> Option<auto_launch::AutoLaunch> {
 }
 
 pub fn set_autostart(enabled: bool) {
+    // Unit tests drive config changes; they must not edit the real registry.
+    if cfg!(test) {
+        return;
+    }
     if let Some(al) = get_auto_launch() {
         let result = if enabled { al.enable() } else { al.disable() };
         if let Err(e) = result {
@@ -341,7 +345,10 @@ impl TrayState {
 
         // Save to disk and update config
         self.config = new_config;
-        if let Err(e) = self.config.save() {
+        // Unit tests must not overwrite the user's real config.toml.
+        if !cfg!(test)
+            && let Err(e) = self.config.save()
+        {
             log::warn!("[config] could not save: {e}");
         }
 
