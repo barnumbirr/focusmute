@@ -8,6 +8,7 @@ use std::ops::Range;
 
 use crate::offsets::DeviceOffsets;
 use crate::protocol;
+use crate::schema::PreampGain;
 
 /// Where a profile's values came from, and therefore how far to trust them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -143,6 +144,13 @@ static SCARLETT_2I2_OFFSETS: DeviceOffsets = DeviceOffsets {
     direct_led_index: protocol::OFF_DIRECT_LED_INDEX,
     direct_led_colour_notify: protocol::NOTIFY_DIRECT_LED_COLOUR,
     selected_input: Some(protocol::OFF_SELECTED_INPUT),
+    preamp_gain: Some(PreampGain {
+        offset: 75,
+        count: 2,
+        notify: 12,
+        value_offset: 252,
+        channel_offset: 253,
+    }),
 };
 
 static SCARLETT_2I2: ModelProfile = ModelProfile {
@@ -198,6 +206,8 @@ static SCARLETT_SOLO_OFFSETS: DeviceOffsets = DeviceOffsets {
     direct_led_colour_notify: protocol::NOTIFY_DIRECT_LED_COLOUR,
     // The Solo has no input-select control, so no number is ever "selected".
     selected_input: None,
+    // Offset not known on firmware 2.x; firmware 3.x gets it from the schema.
+    preamp_gain: None,
 };
 
 static SCARLETT_SOLO_INPUT_HALOS: [HaloRange; 2] = [
@@ -443,6 +453,7 @@ mod tests {
             enable_direct_led_offset: 77,
             direct_led_notify: 5,
             selected_input_offset: Some(331),
+            preamp_gain: None,
             ..Default::default()
         });
         let profile = detect_model("Scarlett 2i2 4th Gen").unwrap().offsets;
@@ -453,6 +464,10 @@ mod tests {
         assert_eq!(profile.enable_direct_led, from_schema.enable_direct_led);
         assert_eq!(profile.direct_led_notify, from_schema.direct_led_notify);
         assert_eq!(profile.selected_input, from_schema.selected_input);
+        let real =
+            crate::schema::parse_schema(include_str!("../../../docs/device_firmware_schema.json"))
+                .unwrap();
+        assert_eq!(profile.preamp_gain, real.preamp_gain);
     }
 
     #[test]

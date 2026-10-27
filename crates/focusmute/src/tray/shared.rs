@@ -150,8 +150,8 @@ pub fn run_core<P: PlatformAdapter>() -> focusmute_lib::error::Result<()> {
         if initial_muted { "muted" } else { "live" }
     );
 
-    if initial_muted && let Some(ref dev) = device {
-        state.set_initial_muted(true, dev);
+    if let Some(ref dev) = device {
+        state.set_initial_muted(initial_muted, dev);
     }
 
     // Init audio/hotkey resources

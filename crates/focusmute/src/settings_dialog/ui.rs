@@ -733,6 +733,7 @@ pub(crate) fn build_and_validate_config(p: &ValidateParams<'_>) -> Result<Config
             input_colors: p.original.indicator.input_colors.clone(),
             blink_on_talk: p.blink_on_talk,
             talk_threshold: p.talk_threshold,
+            mute_gain: p.original.indicator.mute_gain,
         },
         keyboard: focusmute_lib::config::KeyboardConfig {
             hotkey: p.hotkey.to_string(),

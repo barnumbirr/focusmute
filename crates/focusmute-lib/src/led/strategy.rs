@@ -260,7 +260,7 @@ pub fn resolve_strategy_from_config(
     }
     let mute_mode = config.parse_mute_inputs();
     let mute_color = mute_color_or_default(config);
-    let (strategy, strategy_warning) = resolve_mute_strategy(
+    let (mut strategy, strategy_warning) = resolve_mute_strategy(
         &mute_mode,
         profile,
         predicted,
@@ -270,6 +270,13 @@ pub fn resolve_strategy_from_config(
     )?;
     if let Some(w) = strategy_warning {
         warnings.push(w);
+    }
+    if !config.indicator.mute_gain {
+        strategy.offsets.preamp_gain = None;
+    } else if strategy.offsets.preamp_gain.is_none() {
+        warnings.push("mute_gain: preamp gain location unknown for this device".into());
+    } else if config.indicator.blink_on_talk {
+        warnings.push("mute_gain: blink_on_talk cannot hear you while the gain is 0 dB".into());
     }
     Ok((mute_mode, strategy, warnings))
 }
@@ -521,14 +528,14 @@ mod tests {
 
     #[test]
     fn mute_color_or_default_valid_hex() {
-        let mut config = Config::load();
+        let mut config = Config::default();
         config.indicator.mute_color = "#00FF00".into();
         assert_eq!(mute_color_or_default(&config), 0x00FF_0000);
     }
 
     #[test]
     fn mute_color_or_default_invalid_returns_red() {
-        let mut config = Config::load();
+        let mut config = Config::default();
         config.indicator.mute_color = "garbage".into();
         assert_eq!(mute_color_or_default(&config), 0xFF00_0000);
     }
@@ -537,7 +544,7 @@ mod tests {
 
     #[test]
     fn resolve_strategy_all_inputs_with_profile() {
-        let mut config = Config::load();
+        let mut config = Config::default();
         config.indicator.mute_inputs = "all".into();
         let profile = models::detect_model("Scarlett 2i2 4th Gen").unwrap();
         let (mode, strategy, warnings) = resolve_strategy_from_config(
@@ -553,9 +560,34 @@ mod tests {
         assert!(warnings.is_empty());
     }
 
+    /// Gain muting is opt-in: off, the strategy never carries the gain location.
+    #[test]
+    fn resolve_strategy_keeps_preamp_gain_only_when_mute_gain_is_on() {
+        let profile = models::detect_model("Scarlett 2i2 4th Gen").unwrap();
+        for (on, blink, expect_warning) in [
+            (false, true, false),
+            (true, false, false),
+            (true, true, true),
+        ] {
+            let mut config = Config::default();
+            config.indicator.mute_gain = on;
+            config.indicator.blink_on_talk = blink;
+            let (_, strategy, warnings) = resolve_strategy_from_config(
+                &mut config,
+                Some(2),
+                Some(profile),
+                None,
+                profile.offsets,
+            )
+            .unwrap();
+            assert_eq!(strategy.offsets.preamp_gain.is_some(), on);
+            assert_eq!(!warnings.is_empty(), expect_warning);
+        }
+    }
+
     #[test]
     fn resolve_strategy_all_inputs_no_profile_no_predicted_returns_error() {
-        let mut config = Config::load();
+        let mut config = Config::default();
         config.indicator.mute_inputs = "all".into();
         let result = resolve_strategy_from_config(
             &mut config,
@@ -569,7 +601,7 @@ mod tests {
 
     #[test]
     fn resolve_strategy_validation_failure_falls_back() {
-        let mut config = Config::load();
+        let mut config = Config::default();
         config.indicator.mute_inputs = "5".into(); // out of range for 2 inputs
         let profile = models::detect_model("Scarlett 2i2 4th Gen").unwrap();
         let (mode, strategy, warnings) = resolve_strategy_from_config(
@@ -589,7 +621,7 @@ mod tests {
 
     #[test]
     fn resolve_strategy_with_predicted_layout() {
-        let mut config = Config::load();
+        let mut config = Config::default();
         config.indicator.mute_inputs = "all".into();
         let predicted = make_predicted_layout(2);
         let (mode, strategy, warnings) = resolve_strategy_from_config(

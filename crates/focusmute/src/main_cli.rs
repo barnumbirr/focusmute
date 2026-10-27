@@ -54,6 +54,7 @@ fn main() {
         .format(flexi_logger::opt_format)
         .start()
         .ok();
+    focusmute_lib::led::persist_saved_gains();
 
     // Install Ctrl+C handler
     #[cfg(windows)]

@@ -220,6 +220,16 @@ impl TrayState {
         if muted && let Err(e) = self.indicator.apply_mute(device) {
             log::warn!("[mute] could not apply initial mute indicator: {e}");
         }
+        // Gains left by a crash while muted: put them back unless this mute
+        // keeps them. Device offsets, not the strategy's, so this works even
+        // with `mute_gain` turned off since.
+        let keeps_gains = muted && self.indicator.strategy().offsets.preamp_gain.is_some();
+        if !keeps_gains
+            && let Some(ctx) = &self.ctx
+            && let Err(e) = focusmute_lib::led::restore_preamp_gain(device, &ctx.offsets)
+        {
+            log::warn!("[mute] could not restore saved preamp gain: {e}");
+        }
     }
 
     /// Reset the reconnection backoff so the next attempt happens immediately.
@@ -312,6 +322,7 @@ impl TrayState {
         if new_config.indicator.mute_inputs != self.config.indicator.mute_inputs
             || new_config.indicator.input_colors != self.config.indicator.input_colors
             || new_config.indicator.mute_color != self.config.indicator.mute_color
+            || new_config.indicator.mute_gain != self.config.indicator.mute_gain
         {
             match resolve_strategy(&mut new_config, self.ctx.as_ref()) {
                 Ok((new_strategy, sw)) => {
