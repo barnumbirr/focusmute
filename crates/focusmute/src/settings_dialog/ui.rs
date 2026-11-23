@@ -22,6 +22,9 @@ pub(crate) enum ColorDirty {
 /// remains the escape hatch for setups outside these presets.
 const TALK_SENSITIVITY_PRESETS: &[(&str, u32)] = &[("Low", 500), ("Medium", 250), ("High", 100)];
 
+/// Hover-help marker. egui's bundled fonts must cover it: 0.37 dropped "ℹ".
+const HELP_ICON: &str = "(?)";
+
 /// Display text for the sensitivity combo: the preset name when the current
 /// threshold matches one, otherwise "Custom (n)" — a hand-edited TOML value
 /// is shown as-is and never silently replaced.
@@ -494,7 +497,7 @@ impl eframe::App for SettingsApp {
                             let text_width = ui.available_width() - 4.0;
                             ui.horizontal(|ui| {
                                 ui.label(egui::RichText::new("Webhooks").strong());
-                                ui.label("ℹ").on_hover_ui(|ui| {
+                                ui.label(HELP_ICON).on_hover_ui(|ui| {
                                     ui.label("HTTP POST sent on mute state changes. Body is optional — defaults to {\"event\":\"mute\"} / {\"event\":\"unmute\"}.");
                                 });
                             });
@@ -528,7 +531,7 @@ impl eframe::App for SettingsApp {
                             ui.add_space(10.0);
                             ui.horizontal(|ui| {
                                 ui.label(egui::RichText::new("Browser sync").strong());
-                                ui.label("ℹ").on_hover_ui(|ui| {
+                                ui.label(HELP_ICON).on_hover_ui(|ui| {
                                     ui.label("Syncs mute state from browser-based meeting apps (Google Meet, Teams) via a browser extension.");
                                     ui.label("Install the FocusMute extension and set the same port here. Default: 9736. Requires restart.");
                                 });
@@ -875,6 +878,17 @@ fn browse_wav_file() -> Option<String> {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    #[test]
+    fn help_icon_has_glyphs_in_bundled_fonts() {
+        let ctx = egui::Context::default();
+        // No renderer consumes the font atlas upload; egui asserts on dropping it unhandled.
+        ctx.run_ui(egui::RawInput::default(), |_| {})
+            .textures_delta
+            .clear();
+        let font = egui::FontId::proportional(14.0);
+        assert!(ctx.fonts_mut(|f| f.has_glyphs(&font, HELP_ICON)));
+    }
 
     #[test]
     fn sensitivity_presets_are_valid_and_ordered() {
