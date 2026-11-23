@@ -38,6 +38,8 @@ On an unprofiled device, `map` walks the panel one LED at a time so you can reco
 
 Download the MSI installer or standalone `.exe` from [Releases](../../releases).
 
+FocusMute needs the Focusrite USB driver ([focusrite.com/downloads](https://focusrite.com/downloads)). Without it, Windows runs the interface on its generic USB audio driver, which has no LED control, and FocusMute reports the driver as missing.
+
 - `focusmute.exe` -- system tray app (tray icon, hotkey, settings dialog)
 - `focusmute-cli.exe` -- CLI-only binary
 

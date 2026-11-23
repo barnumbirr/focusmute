@@ -17,6 +17,10 @@ use crate::protocol::*;
 #[derive(Debug)]
 pub enum DeviceError {
     NotFound,
+    /// A Focusrite USB device is present, but the Focusrite driver is not
+    /// installed, so Windows runs it on its generic USB audio driver and
+    /// exposes no control interface.
+    DriverMissing,
     OpenFailed(String),
     InitFailed(String),
     TransactFailed(String),
@@ -27,6 +31,10 @@ impl fmt::Display for DeviceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             DeviceError::NotFound => write!(f, "Scarlett device not found"),
+            DeviceError::DriverMissing => write!(
+                f,
+                "Focusrite device found, but the Focusrite USB driver is not installed (install it from focusrite.com/downloads)"
+            ),
             DeviceError::OpenFailed(e) => write!(f, "Failed to open device: {e}"),
             DeviceError::InitFailed(e) => write!(f, "Device init failed: {e}"),
             DeviceError::TransactFailed(e) => write!(f, "Transaction failed: {e}"),
@@ -686,7 +694,7 @@ mod windows_impl {
 
     impl ScarlettDevice for WindowsDevice {
         fn open() -> Result<Self> {
-            let (path, serial) = Self::find_device().ok_or(DeviceError::NotFound)?;
+            let (path, serial) = Self::find_device().ok_or_else(super::not_found_error)?;
 
             let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
             let raw_handle = unsafe {
@@ -1230,6 +1238,16 @@ pub fn is_device_path_present(path: &str) -> bool {
     }
 }
 
+/// The error for "no control interface found": `DriverMissing` when a
+/// Focusrite USB device is plugged in without its driver, `NotFound` otherwise.
+pub fn not_found_error() -> DeviceError {
+    #[cfg(windows)]
+    if windows_impl::find_usb_serial().is_some() {
+        return DeviceError::DriverMissing;
+    }
+    DeviceError::NotFound
+}
+
 /// Enumerate all Focusrite device interfaces.
 ///
 /// Returns a list of discovered devices without opening or initializing them.
@@ -1337,7 +1355,7 @@ pub fn open_device_by_serial(serial: &str) -> Result<PlatformDevice> {
         }
         open_device()
     } else if devices.is_empty() {
-        Err(DeviceError::NotFound)
+        Err(not_found_error())
     } else {
         let available: Vec<String> = devices
             .iter()
