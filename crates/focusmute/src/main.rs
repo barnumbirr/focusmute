@@ -173,3 +173,35 @@ fn show_fatal_error(msg: &str) {
 fn show_fatal_error(_msg: &str) {
     // On non-Windows platforms, eprintln above is visible from the terminal.
 }
+
+#[cfg(test)]
+mod tests {
+    // The timestamp format string is chrono syntax handed to whatever time crate
+    // flexi_logger uses; a specifier it rejects fails the write and drops the line.
+    #[test]
+    fn log_format_renders_timestamp() {
+        let mut out = Vec::new();
+        super::focusmute_log_format(
+            &mut out,
+            &mut flexi_logger::DeferredNow::new(),
+            &log::Record::builder()
+                .level(log::Level::Info)
+                .args(format_args!("hello"))
+                .build(),
+        )
+        .unwrap();
+        let line = String::from_utf8(out).unwrap();
+        let shape: String = line
+            .chars()
+            .map(|c| match c {
+                '0'..='9' => '0',
+                '+' => '-',
+                c => c,
+            })
+            .collect();
+        assert_eq!(
+            shape, "[0000-00-00 00:00:00.000000 -00:00] INFO  hello",
+            "{line}"
+        );
+    }
+}
