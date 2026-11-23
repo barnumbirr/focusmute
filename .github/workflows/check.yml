@@ -18,7 +18,7 @@ jobs:
           components: rustfmt, clippy
           targets: x86_64-pc-windows-gnu
 
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: linux
 
@@ -40,7 +40,7 @@ jobs:
         run: cargo clippy --target x86_64-pc-windows-gnu --all-targets -- -D warnings
 
       - name: Audit advisories
-        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        uses: EmbarkStudios/cargo-deny-action@70f81531115945ba6eb6b941ec9d39d063438eb9 # v2.1.2
         with:
           command: check advisories
 
