@@ -473,14 +473,11 @@ mod tests {
         assert_eq!(layout.leds[0].zone, LedZone::InputNumber);
 
         // Verify Input 1 halo segments
-        for seg in 1..=7 {
-            assert_eq!(layout.leds[seg].index, seg);
-            assert_eq!(
-                layout.leds[seg].label,
-                format!("Input 1 — Halo segment {seg}")
-            );
-            assert_eq!(layout.leds[seg].confidence, Confidence::Medium);
-            assert_eq!(layout.leds[seg].zone, LedZone::InputHalo);
+        for (seg, led) in layout.leds.iter().enumerate().take(8).skip(1) {
+            assert_eq!(led.index, seg);
+            assert_eq!(led.label, format!("Input 1 — Halo segment {seg}"));
+            assert_eq!(led.confidence, Confidence::Medium);
+            assert_eq!(led.zone, LedZone::InputHalo);
         }
 
         // Verify Input 2 number indicator at index 8
