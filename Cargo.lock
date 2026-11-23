@@ -1103,7 +1103,7 @@ dependencies = [
 
 [[package]]
 name = "focusmute"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "assert_cmd",
  "auto-launch",
@@ -1133,7 +1133,7 @@ dependencies = [
 
 [[package]]
 name = "focusmute-lib"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "base64",
  "dirs 7.0.0",
