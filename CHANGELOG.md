@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Logging moves to `flexi_logger` 0.32, which no longer pulls in the unmaintained `chrono` (RUSTSEC-2026-0543)
+- Dependency refresh: GUI stack on egui/eframe 0.37 with `global-hotkey` 0.10 and `rfd` 0.18, plus `flexi_logger` 0.32, `notify-rust` 4.19, `toml` 1.2 and patch updates. The build no longer pulls in the unmaintained `chrono` (RUSTSEC-2026-0543) or the `zvariant` and `zbus_names` crates (RUSTSEC-2026-0370, RUSTSEC-2026-0371, RUSTSEC-2026-0372)
 
 ## [0.12.1] - 2026-10-21
 
