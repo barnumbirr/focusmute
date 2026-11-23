@@ -6,7 +6,7 @@
 //! `protocol.rs`.
 
 use crate::protocol;
-use crate::schema::SchemaConstants;
+use crate::schema::{PreampGain, SchemaConstants};
 
 /// Descriptor offsets and LED counts for a specific device model.
 ///
@@ -32,6 +32,9 @@ pub struct DeviceOffsets {
     /// control. `None` means number-LED restore cannot distinguish a selected
     /// input and must use the unselected colour for every number.
     pub selected_input: Option<u32>,
+    /// Preamp gain control, or `None` when the model has none known. Muting
+    /// then only lights the LEDs.
+    pub preamp_gain: Option<PreampGain>,
 }
 
 /// Treat zero as absent, for both descriptor offsets and DATA_NOTIFY event
@@ -83,6 +86,7 @@ impl DeviceOffsets {
                 "directLEDColour notify-device",
             ),
             selected_input: sc.selected_input_offset,
+            preamp_gain: sc.preamp_gain,
         }
     }
 
@@ -104,6 +108,9 @@ impl Default for DeviceOffsets {
             direct_led_index: protocol::OFF_DIRECT_LED_INDEX,
             direct_led_colour_notify: protocol::NOTIFY_DIRECT_LED_COLOUR,
             selected_input: Some(protocol::OFF_SELECTED_INPUT),
+            // Never guessed: the 2.x parameter buffer offsets land inside
+            // directLEDValues on 3.x firmware. Profiles and schemas set it.
+            preamp_gain: None,
         }
     }
 }
@@ -149,6 +156,7 @@ mod tests {
             direct_led_index_offset: 92,
             direct_led_colour_notify: 8,
             selected_input_offset: Some(400),
+            preamp_gain: None,
             metering_segments: 0,
             input_controls: vec![],
             app_space_features: vec![],
@@ -189,6 +197,7 @@ mod tests {
             direct_led_index_offset: 88,
             direct_led_colour_notify: 8,
             selected_input_offset: Some(331),
+            preamp_gain: None,
             metering_segments: 25,
             input_controls: vec![],
             app_space_features: vec![],
@@ -227,6 +236,7 @@ mod tests {
             direct_led_index_offset: 84,
             direct_led_colour_notify: 8,
             selected_input_offset: None,
+            preamp_gain: None,
             ..SchemaConstants::default()
         };
         let offsets = DeviceOffsets::from_schema(&sc);
@@ -292,6 +302,7 @@ mod tests {
             direct_led_index_offset: 92,
             direct_led_colour_notify: 8,
             selected_input_offset: Some(400),
+            preamp_gain: None,
             metering_segments: 0,
             input_controls: vec![],
             app_space_features: vec![],

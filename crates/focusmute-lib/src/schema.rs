@@ -26,7 +26,25 @@ use crate::device::{DeviceError, Result, ScarlettDevice};
 use crate::protocol::*;
 
 /// Current schema cache format version. Bump when SchemaConstants fields change.
-pub const SCHEMA_FORMAT_VERSION: u32 = 2;
+pub const SCHEMA_FORMAT_VERSION: u32 = 3;
+
+/// Where a model keeps its preamp gain and how to write it.
+///
+/// Written through the parameter buffer: channel, then value, then
+/// `DATA_NOTIFY(notify)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PreampGain {
+    /// `preampInputGain` offset (one u8 dB per input).
+    pub offset: u32,
+    /// Number of inputs in the `preampInputGain` array.
+    pub count: usize,
+    /// `preampInputGain` `notify-device` event ID.
+    pub notify: u32,
+    /// `parameterValue` offset.
+    pub value_offset: u32,
+    /// `parameterChannel` offset.
+    pub channel_offset: u32,
+}
 
 /// Constants extracted from the firmware schema for a specific model.
 ///
@@ -83,6 +101,10 @@ pub struct SchemaConstants {
     /// restore colour yields whatever that field happens to hold.
     #[serde(default)]
     pub selected_input_offset: Option<u32>,
+
+    /// Preamp gain control, or `None` when the schema lacks any part of it.
+    #[serde(default)]
+    pub preamp_gain: Option<PreampGain>,
 
     /// kNUMBER_METERING_SEGMENTS — total halo segments (e.g., 25 for 2i2 = 2×7 + 11).
     #[serde(default)]
@@ -315,6 +337,24 @@ pub fn parse_schema(json: &str) -> crate::error::Result<SchemaConstants> {
         .and_then(|v| v.as_u64())
         .map(|v| v as u32);
 
+    // Preamp gain is optional: without all four members the mute only lights the LEDs.
+    let app_member = |name: &str, key: &str| {
+        root.pointer(&format!("/structs/APP_SPACE/members/{name}"))
+            .and_then(|m| m.get(key))
+            .and_then(|v| v.as_u64())
+    };
+    let preamp_gain = (|| {
+        Some(PreampGain {
+            offset: app_member("preampInputGain", "offset")? as u32,
+            count: root
+                .pointer("/structs/APP_SPACE/members/preampInputGain/array-shape/0")?
+                .as_u64()? as usize,
+            notify: app_member("preampInputGain", "notify-device")? as u32,
+            value_offset: app_member("parameterValue", "offset")? as u32,
+            channel_offset: app_member("parameterChannel", "offset")? as u32,
+        })
+    })();
+
     // Extract kNUMBER_METERING_SEGMENTS (optional — default 0 if missing)
     let metering_segments = enumerators
         .get("kNUMBER_METERING_SEGMENTS")
@@ -363,6 +403,7 @@ pub fn parse_schema(json: &str) -> crate::error::Result<SchemaConstants> {
         enable_direct_led_offset,
         direct_led_notify,
         selected_input_offset,
+        preamp_gain,
         metering_segments,
         input_controls,
         app_space_features,
@@ -512,6 +553,37 @@ fn extract_enum_value(enumerators: &serde_json::Value, key: &str) -> crate::erro
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+
+    /// Preamp gain location comes from the real 2i2 schemas, one per firmware layout.
+    #[test]
+    fn parse_schema_extracts_preamp_gain_from_real_schemas() {
+        for (file, offset, value, channel) in [
+            (
+                include_str!("../../../docs/device_firmware_schema.json"),
+                75,
+                252,
+                253,
+            ),
+            (
+                include_str!("../../../docs/device_firmware_schema_3.0.2452.0.json"),
+                99,
+                276,
+                277,
+            ),
+        ] {
+            let pg = parse_schema(file).unwrap().preamp_gain.unwrap();
+            assert_eq!(
+                pg,
+                PreampGain {
+                    offset,
+                    count: 2,
+                    notify: 12,
+                    value_offset: value,
+                    channel_offset: channel
+                }
+            );
+        }
+    }
     use crate::device::mock::MockDevice;
     use flate2::Compression;
     use flate2::write::ZlibEncoder;

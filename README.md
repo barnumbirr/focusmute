@@ -8,6 +8,7 @@ FocusMute monitors your system microphone's mute state and reflects it on your F
 
 - Global hotkey toggle (default: Ctrl+Shift+M) and push-to-talk hotkey, with sound feedback
 - Blink the mute indicator when you talk while muted (opt-in, configurable threshold)
+- Drop the preamp gain to 0 dB while muted, so the halos and Focusrite Control meters go quiet too (opt-in, `mute_gain`)
 - Configurable mute color per input (any hex color or named color)
 - Auto-reconnect on device disconnect and graceful startup without device
 - Schema-driven multi-model support (auto-discovers unknown Scarlett 4th Gen devices)
@@ -161,6 +162,7 @@ on_unmute_body = ""
 | `[system].log_level` | `"info"` | Log level: error, warn, info, debug, trace |
 | `[indicator].blink_on_talk` | `false` | Blink the mute indicator when input level exceeds `talk_threshold` while muted |
 | `[indicator].talk_threshold` | `250` | Raw input meter level that counts as talking (0–4095 = silence to full scale). The settings dialog offers Low/Medium/High presets (500/250/100); set any other value here directly |
+| `[indicator].mute_gain` | `false` | Set the muted inputs' preamp gain to 0 dB while muted and restore it on unmute. Needs the gain location from the model profile or schema (2i2 on any firmware; Solo on firmware 3.x). `blink_on_talk` hears almost nothing while it is on |
 | `[system].browser_sync_port` | `0` | Port for browser extension sync (0 = disabled, e.g. 9736; must be >= 1024) |
 | `[system].browser_sync_reverse` | `false` | Mirror hotkey/tray mute changes into browser meetings (extension clicks the meeting's mute button) |
 | `[hooks].on_mute_url` | `""` | Webhook URL to POST on mute (empty = disabled) |

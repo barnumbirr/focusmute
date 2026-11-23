@@ -51,6 +51,12 @@ pub struct IndicatorConfig {
     /// this key is the escape hatch for setups outside those.
     #[serde(default = "default_talk_threshold")]
     pub talk_threshold: u32,
+
+    /// Drop the muted inputs' preamp gain to 0 dB while muted, so the halos
+    /// and Focusrite Control meters go quiet too. Default: false. The gain is
+    /// restored on unmute; `blink_on_talk` then hears almost nothing.
+    #[serde(default)]
+    pub mute_gain: bool,
 }
 
 impl Default for IndicatorConfig {
@@ -61,6 +67,7 @@ impl Default for IndicatorConfig {
             input_colors: HashMap::new(),
             blink_on_talk: false,
             talk_threshold: default_talk_threshold(),
+            mute_gain: false,
         }
     }
 }

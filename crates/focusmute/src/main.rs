@@ -116,6 +116,7 @@ fn focusmute_log_format(
 
 fn main() {
     init_tray_logger();
+    focusmute_lib::led::persist_saved_gains();
 
     #[cfg(not(any(windows, target_os = "linux")))]
     {

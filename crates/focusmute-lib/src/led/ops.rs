@@ -1,7 +1,11 @@
 //! LED device operations — single-LED mute indicator apply/clear/restore.
 
+use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
+
 use crate::device::{Result, ScarlettDevice};
 use crate::offsets::DeviceOffsets;
+use crate::schema::PreampGain;
 
 use super::strategy::MuteStrategy;
 
@@ -66,6 +70,101 @@ fn restore_number_leds(device: &impl ScarlettDevice, strategy: &MuteStrategy) ->
     Ok(())
 }
 
+// ── Hardware preamp gain (the card's own input level) ──
+
+/// Preamp gains saved while muted, as `(input index, dB)`. Empty when not muted.
+/// Mirrored to `saved_gains.txt` so a crash while muted cannot lose them.
+static SAVED_GAINS: Mutex<Vec<(usize, u8)>> = Mutex::new(Vec::new());
+
+/// The mirror file. Unset (memory only) until a binary calls [`persist_saved_gains`],
+/// so no test in any crate can read or write the user's real file.
+static GAINS_FILE: OnceLock<PathBuf> = OnceLock::new();
+
+/// Mirror saved preamp gains to `saved_gains.txt` in the config directory.
+/// Call once at startup from each binary.
+pub fn persist_saved_gains() {
+    if let Some(dir) = crate::config::Config::dir() {
+        let _ = GAINS_FILE.set(dir.join("saved_gains.txt"));
+    }
+}
+
+fn persist_gains(saved: &[(usize, u8)]) {
+    let Some(path) = GAINS_FILE.get() else { return };
+    let text: String = saved.iter().map(|(i, db)| format!("{i}:{db}\n")).collect();
+    if let Err(e) = std::fs::write(path, text) {
+        log::warn!("[gain] could not save {}: {e}", path.display());
+    }
+}
+
+/// Gains left in the mirror file by a run that ended while muted.
+fn load_gains() -> Vec<(usize, u8)> {
+    let Some(text) = GAINS_FILE
+        .get()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+    else {
+        return Vec::new();
+    };
+    text.lines()
+        .filter_map(|l| {
+            let (i, db) = l.split_once(':')?;
+            Some((i.parse().ok()?, db.parse().ok()?))
+        })
+        .collect()
+}
+
+/// Write one preamp gain through the parameter buffer + DATA_NOTIFY.
+fn set_preamp_gain(
+    device: &impl ScarlettDevice,
+    pg: &PreampGain,
+    input: usize,
+    db: u8,
+) -> Result<()> {
+    device.set_descriptor(pg.channel_offset, &[input as u8])?;
+    device.set_descriptor(pg.value_offset, &[db])?;
+    device.data_notify(pg.notify)
+}
+
+/// Drop the muted inputs' preamp gain to 0 dB so the card sends no signal.
+fn mute_preamp_gain(device: &impl ScarlettDevice, strategy: &MuteStrategy) -> Result<()> {
+    let Some(pg) = strategy.offsets.preamp_gain else {
+        return Ok(());
+    };
+    let mut saved = SAVED_GAINS.lock().unwrap_or_else(|e| e.into_inner());
+    if saved.is_empty() {
+        *saved = load_gains();
+    }
+    if !saved.is_empty() {
+        return Ok(()); // already muted; keep the original gains
+    }
+    for &input in strategy.input_indices.iter().filter(|&&i| i < pg.count) {
+        let gain = device.get_descriptor(pg.offset + input as u32, 1)?;
+        saved.push((input, gain.first().copied().unwrap_or(0)));
+        persist_gains(&saved);
+        set_preamp_gain(device, &pg, input, 0)?;
+    }
+    Ok(())
+}
+
+/// Put the saved preamp gains back. A no-op when none are saved.
+pub fn restore_preamp_gain(device: &impl ScarlettDevice, offsets: &DeviceOffsets) -> Result<()> {
+    let Some(pg) = offsets.preamp_gain else {
+        return Ok(());
+    };
+    let mut saved = SAVED_GAINS.lock().unwrap_or_else(|e| e.into_inner());
+    if saved.is_empty() {
+        *saved = load_gains();
+    }
+    while let Some(&(input, db)) = saved.last() {
+        // A file left by another model may name inputs this one lacks.
+        if input < pg.count {
+            set_preamp_gain(device, &pg, input, db)?;
+        }
+        saved.pop();
+        persist_gains(&saved);
+    }
+    Ok(())
+}
+
 // ── Mute indicator operations ──
 
 /// Apply the mute indicator based on the resolved strategy.
@@ -81,17 +180,19 @@ pub fn apply_mute_indicator(
         let color = strategy.mute_colors.get(i).copied().unwrap_or(mute_color);
         set_single_led(device, &strategy.offsets, led_idx, color)?;
     }
-    Ok(())
+    mute_preamp_gain(device, strategy)
 }
 
 /// Clear the mute indicator and restore normal LED state.
 pub fn clear_mute_indicator(device: &impl ScarlettDevice, strategy: &MuteStrategy) -> Result<()> {
-    restore_number_leds(device, strategy)
+    restore_number_leds(device, strategy)?;
+    restore_preamp_gain(device, &strategy.offsets)
 }
 
 /// Restore LED state on application exit.
 pub fn restore_on_exit(device: &impl ScarlettDevice, strategy: &MuteStrategy) -> Result<()> {
-    restore_number_leds(device, strategy)
+    restore_number_leds(device, strategy)?;
+    restore_preamp_gain(device, &strategy.offsets)
 }
 
 /// Re-apply mute indicator after reconnecting, if currently muted.
@@ -106,6 +207,8 @@ pub fn refresh_after_reconnect(
 ) -> Result<()> {
     if is_muted {
         apply_mute_indicator(device, strategy, mute_color)?;
+    } else {
+        restore_preamp_gain(device, &strategy.offsets)?;
     }
     Ok(())
 }
@@ -510,6 +613,43 @@ mod tests {
         // Should propagate the error from apply_mute_indicator
         let result = refresh_after_reconnect(&dev, &strategy, 0xFF00_0000, true);
         assert!(result.is_err(), "should return Err when apply fails");
+    }
+
+    // ── preamp gain ──
+
+    /// The only test that touches SAVED_GAINS, so parallel tests cannot race on it.
+    #[test]
+    fn mute_zeroes_preamp_gain_and_unmute_restores_it() {
+        let dev = MockDevice::new();
+        let pg = PreampGain {
+            offset: 75,
+            count: 2,
+            notify: 12,
+            value_offset: 252,
+            channel_offset: 253,
+        };
+        let mut strategy = make_strategy_both_inputs();
+        strategy.offsets.preamp_gain = Some(pg);
+        dev.set_descriptor(pg.offset, &[12, 61]).unwrap();
+        let gain_writes = || dev.notifies.borrow().iter().filter(|&&n| n == 12).count();
+
+        apply_mute_indicator(&dev, &strategy, 0xFF00_0000).unwrap();
+        assert_eq!(gain_writes(), 2);
+        assert_eq!(dev.get_descriptor(pg.value_offset, 1).unwrap(), [0]);
+
+        // A second mute must not save the zeroed gains over the real ones.
+        apply_mute_indicator(&dev, &strategy, 0xFF00_0000).unwrap();
+        assert_eq!(gain_writes(), 2);
+
+        clear_mute_indicator(&dev, &strategy).unwrap();
+        assert_eq!(gain_writes(), 4);
+        // Restored last-in first-out, so input 0 (12 dB) is the final write.
+        assert_eq!(dev.get_descriptor(pg.channel_offset, 1).unwrap(), [0]);
+        assert_eq!(dev.get_descriptor(pg.value_offset, 1).unwrap(), [12]);
+
+        // Nothing saved any more: restore is a no-op.
+        restore_preamp_gain(&dev, &strategy.offsets).unwrap();
+        assert_eq!(gain_writes(), 4);
     }
 
     // ── T3: set_single_led error propagation ──
